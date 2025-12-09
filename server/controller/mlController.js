@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 const ExcelJS = require('exceljs');
 const csv = require('csv-parser');
 const stream = require('stream');
+const axios = require('axios');
 
 const {
   predictWithTOI,
@@ -20,8 +21,353 @@ const {
   storePrediction,
   generateCSVExport,
   generateExcelExport,
-  getEntriesForExport
+  getEntriesForExport,
+  ML_SERVICES
 } = require('../utils/mlUtils');
+
+
+// ----------------- Helper Functions -----------------
+
+/**
+ * Generate mock performance data for when ML service is unavailable
+ */
+const generateMockPerformanceData = () => {
+  const trainingHistory = [];
+  const livePredictions = [];
+
+  // Generate mock training history
+  for (let i = 1; i <= 5; i++) {
+    trainingHistory.push({
+      timestamp: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString(),
+      training_samples: 1000 * i,
+      test_samples: 200 * i,
+      accuracy: 0.7 + (i * 0.05),
+      feature_count: 11,
+      evaluation_metrics: {
+        accuracy: 0.7 + (i * 0.05),
+        classification_report: {
+          FP: { precision: 0.8, recall: 0.7, 'f1-score': 0.75, support: 100 },
+          PC: { precision: 0.75, recall: 0.8, 'f1-score': 0.77, support: 150 }
+        }
+      }
+    });
+  }
+
+  // Generate mock live predictions
+  const classes = ['FP', 'PC', 'KP', 'CP', 'APC', 'FA'];
+  const classDistribution = {};
+  for (let i = 0; i < 50; i++) {
+    const predictedClass = classes[Math.floor(Math.random() * classes.length)];
+    livePredictions.push({
+      timestamp: new Date(Date.now() - i * 60 * 60 * 1000).toISOString(),
+      predicted_class: predictedClass,
+      confidence: 0.6 + Math.random() * 0.4,
+      features_used: ['pl_orbper', 'pl_trandep', 'pl_rade', 'st_teff']
+    });
+    classDistribution[predictedClass] = (classDistribution[predictedClass] || 0) + 1;
+  }
+  
+  // Base64-encoded placeholders for charts
+  const mockChart = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+  return {
+    success: true,
+    performance_summary: {
+      current_accuracy: 0.85,
+      best_accuracy: 0.88,
+      total_predictions: 50,
+      total_live_predictions: 50,
+      training_samples: 5000,
+      training_sessions: 5,
+      class_distribution: classDistribution,
+      last_trained: new Date().toISOString(),
+      accuracy_trend: 'improving'
+    },
+    charts: {
+      class_distribution: mockChart,
+      accuracy_progress: mockChart,
+      confidence_distribution: mockChart,
+      training_data_growth: mockChart
+    },
+    suggestions: [
+      "📈 Model accuracy is improving steadily",
+      "🎯 Consider collecting more data for underrepresented classes",
+      "🔄 Ready for retraining with new prediction data"
+    ],
+    is_mock: true
+  };
+};
+
+/**
+ * Generate training suggestions based on performance data
+ */
+const generateTrainingSuggestions = (performanceData) => {
+  const suggestions = [];
+  const summary = performanceData.performance_summary;
+
+  if (!summary) return suggestions;
+
+  if (summary.training_sessions === 0) {
+    suggestions.push("🚀 Train your model with initial dataset to get started");
+  }
+
+  if (summary.current_accuracy < 0.7) {
+    suggestions.push("📊 Consider adding more diverse training data");
+  }
+
+  if (Object.keys(summary.class_distribution || {}).length < 3) {
+    suggestions.push("🎯 Add predictions for different classes to improve model balance");
+  }
+
+  if (summary.total_predictions > 100 && summary.training_sessions === 1) {
+    suggestions.push("🔄 Consider retraining with new prediction data");
+  }
+
+  if (summary.training_samples < 1000) {
+    suggestions.push("📈 More training data would likely improve accuracy");
+  }
+
+  if (summary.accuracy_trend === 'declining') {
+    suggestions.push("⚠️ Model performance is declining - consider retraining with corrected labels");
+  }
+
+  if (summary.current_accuracy > 0.9) {
+    suggestions.push("✅ Model is performing excellently! Consider fine-tuning for specific use cases");
+  }
+
+  return suggestions.length > 0 ? suggestions : ["✅ Model is performing well. Continue monitoring performance."];
+};
+
+
+// ----------------- Model Performance Tracker Bridge Functions -----------------
+
+/**
+ * Get model performance metrics and charts
+ */
+const getModelPerformance = async (req, res) => {
+  try {
+    const { modelType } = req.params;
+    const userId = req.user.id;
+
+    console.log(`📊 Model performance requested for ${modelType} by user ${userId}`);
+
+    let serviceUrl;
+    switch (modelType.toLowerCase()) {
+      case 'toi':
+        serviceUrl = ML_SERVICES.TOI;
+        break;
+      case 'koi':
+        serviceUrl = ML_SERVICES.KOI;
+        break;
+      case 'k2':
+        serviceUrl = ML_SERVICES.K2;
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid model type. Use: toi, koi, k2'
+        });
+    }
+
+    // Call the ML service performance endpoint
+    const response = await axios.get(`${serviceUrl}/model/performance`, {
+      timeout: 10000
+    });
+
+    res.json({
+      success: true,
+      data: response.data,
+      message: `Model performance data retrieved for ${modelType.toUpperCase()}`
+    });
+
+  } catch (error) {
+    console.error('Get Model Performance Error:', error.message);
+
+    // Return mock performance data if service is unavailable
+    const mockPerformance = generateMockPerformanceData();
+
+    res.json({
+      success: true,
+      data: mockPerformance,
+      message: 'Using mock performance data (service unavailable)',
+      is_mock: true
+    });
+  }
+};
+
+/**
+ * Record prediction for continuous learning
+ */
+const recordPredictionForTraining = async (req, res) => {
+  try {
+    const { modelType } = req.params;
+    const { prediction, actual_class } = req.body;
+    const userId = req.user.id;
+
+    console.log(`📝 Recording prediction for training - ${modelType} by user ${userId}`);
+
+    let serviceUrl;
+    switch (modelType.toLowerCase()) {
+      case 'toi':
+        serviceUrl = ML_SERVICES.TOI;
+        break;
+      case 'koi':
+        serviceUrl = ML_SERVICES.KOI;
+        break;
+      case 'k2':
+        serviceUrl = ML_SERVICES.K2;
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid model type'
+        });
+    }
+
+    // Call the ML service to record prediction
+    const response = await axios.post(`${serviceUrl}/model/record_prediction`, {
+      prediction,
+      actual_class
+    }, {
+      timeout: 10000
+    });
+
+    res.json({
+      success: true,
+      data: response.data,
+      message: 'Prediction recorded for future training'
+    });
+
+  } catch (error) {
+    console.error('Record Prediction Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to record prediction for training',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Retrain model with new data
+ */
+const retrainModelWithNewData = async (req, res) => {
+  try {
+    const { modelType } = req.params;
+    const userId = req.user.id;
+
+    console.log(`🔄 Retraining ${modelType} model with new data by user ${userId}`);
+
+    let serviceUrl;
+    switch (modelType.toLowerCase()) {
+      case 'toi':
+        serviceUrl = ML_SERVICES.TOI;
+        break;
+      case 'koi':
+        serviceUrl = ML_SERVICES.KOI;
+        break;
+      case 'k2':
+        serviceUrl = ML_SERVICES.K2;
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid model type'
+        });
+    }
+
+    // Call the ML service to retrain with new data
+    const response = await axios.post(`${serviceUrl}/model/retrain_with_new_data`, {}, {
+      timeout: 60000 // 60 seconds timeout for training
+    });
+
+    res.json({
+      success: true,
+      data: response.data,
+      message: `Model retrained successfully with new data`
+    });
+
+  } catch (error) {
+    console.error('Retrain Model Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrain model',
+      error: error.response?.data?.error || error.message
+    });
+  }
+};
+
+/**
+ * Get training suggestions
+ */
+const getTrainingSuggestions = async (req, res) => {
+  try {
+    const { modelType } = req.params;
+    const userId = req.user.id;
+
+    console.log(`💡 Getting training suggestions for ${modelType} by user ${userId}`);
+
+    let serviceUrl;
+    switch (modelType.toLowerCase()) {
+      case 'toi':
+        serviceUrl = ML_SERVICES.TOI;
+        break;
+      case 'koi':
+        serviceUrl = ML_SERVICES.KOI;
+        break;
+      case 'k2':
+        serviceUrl = ML_SERVICES.K2;
+        break;
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid model type. Use: toi, koi, k2'
+        });
+    }
+
+    const response = await axios.get(`${serviceUrl}/model/performance`, {
+      timeout: 10000
+    });
+    
+    const performanceData = response.data;
+    const suggestions = generateTrainingSuggestions(performanceData);
+
+    res.json({
+      success: true,
+      data: {
+        suggestions,
+        performance_summary: performanceData.performance_summary
+      },
+      message: 'Training suggestions generated'
+    });
+
+  } catch (error) {
+    console.error('Get Training Suggestions Error:', error.message);
+
+    // Return default suggestions if service is unavailable
+    const defaultSuggestions = [
+      "🚀 Train your model with initial dataset to get started",
+      "📊 Consider adding more diverse training data",
+      "🎯 Add predictions for different classes to improve model balance"
+    ];
+
+    res.json({
+      success: true,
+      data: {
+        suggestions: defaultSuggestions,
+        performance_summary: {
+          current_accuracy: 0,
+          best_accuracy: 0,
+          total_predictions: 0,
+          training_sessions: 0
+        }
+      },
+      message: 'Using default training suggestions',
+      is_mock: true
+    });
+  }
+};
+
 
 // ----------------- Enhanced Prediction with Storage -----------------
 const predictTOI = async (req, res) => {
@@ -49,11 +395,23 @@ const predictTOI = async (req, res) => {
       // Single prediction - store with enhanced data structure
       const storedEntry = await storePrediction(userId, 'toi', data, predictionResult.prediction || predictionResult);
       console.log(`✅ TOI prediction stored with ID: ${storedEntry.id}`);
+
+      // Record prediction for performance tracking
+      try {
+        await axios.post(`${ML_SERVICES.TOI}/model/record_prediction`, {
+          prediction: predictionResult.prediction || predictionResult,
+          actual_class: null // User can provide this later for active learning
+        }, {
+          timeout: 5000
+        });
+      } catch (error) {
+        console.log('Performance tracking not available, continuing...');
+      }
     } else {
       // Bulk predictions - store each result
       const predictions = predictionResult.predictions || [];
       let storedCount = 0;
-      
+
       for (const result of predictions) {
         if (!result.error) {
           await storePrediction(userId, 'toi', result.input_features, result);
@@ -66,8 +424,8 @@ const predictTOI = async (req, res) => {
     res.json({
       success: true,
       data: predictionResult,
-      message: isBulk ? 
-        `Processed ${(predictionResult.predictions || []).length} TOI records` : 
+      message: isBulk ?
+        `Processed ${(predictionResult.predictions || []).length} TOI records` :
         'TOI prediction completed successfully',
       stored: true,
       model_type: 'TOI'
@@ -89,6 +447,7 @@ const predictKOI = async (req, res) => {
     const userId = req.user.id;
 
     console.log(`🔮 KOI Prediction requested by user ${userId}, bulk: ${isBulk}`);
+    console.log(`📊 Data received:`, JSON.stringify(data, null, 2));
 
     const validation = validateData(data, 'koi');
     if (!validation.valid) {
@@ -99,7 +458,10 @@ const predictKOI = async (req, res) => {
       });
     }
 
+    console.log(`🚀 Calling KOI ML service...`);
     const predictionResult = await predictWithKOI(data);
+    
+    console.log(`✅ KOI prediction result:`, JSON.stringify(predictionResult, null, 2));
 
     // Enhanced storage
     if (!isBulk) {
@@ -108,7 +470,7 @@ const predictKOI = async (req, res) => {
     } else {
       const predictions = predictionResult.predictions || [];
       let storedCount = 0;
-      
+
       for (const result of predictions) {
         if (!result.error) {
           await storePrediction(userId, 'koi', result.input_features, result);
@@ -120,20 +482,31 @@ const predictKOI = async (req, res) => {
 
     res.json({
       success: true,
-      data: predictionResult,
-      message: isBulk ? 
-        `Processed ${(predictionResult.predictions || []).length} KOI records` : 
+      message: isBulk ?
+        `Processed ${(predictionResult.predictions || []).length} KOI records` :
         'KOI prediction completed successfully',
+      data: {
+        prediction: predictionResult.prediction,
+        is_mock: predictionResult.data?.is_mock || false,
+        stored: true,
+        storage_id: isBulk ? null : (await storePrediction(userId, 'koi', data, predictionResult.prediction)).id
+      },
+      diagrams: predictionResult.diagrams,
+      predictionResult: predictionResult,
       stored: true,
       model_type: 'KOI'
     });
 
   } catch (error) {
-    console.error('KOI Prediction Error:', error);
+    console.error('❌ KOI Prediction Error:', error);
+    console.error('Stack trace:', error.stack);
+    
     res.status(500).json({
       success: false,
       message: 'KOI prediction failed',
-      error: error.message
+      error: error.message,
+      details: error.response?.data || 'No additional details',
+      has_mock_data: true
     });
   }
 };
@@ -163,7 +536,7 @@ const predictK2 = async (req, res) => {
     } else {
       const predictions = predictionResult.predictions || [];
       let storedCount = 0;
-      
+
       for (const result of predictions) {
         if (!result.error) {
           await storePrediction(userId, 'k2', result.input_features, result);
@@ -176,8 +549,8 @@ const predictK2 = async (req, res) => {
     res.json({
       success: true,
       data: predictionResult,
-      message: isBulk ? 
-        `Processed ${(predictionResult.predictions || []).length} K2 records` : 
+      message: isBulk ?
+        `Processed ${(predictionResult.predictions || []).length} K2 records` :
         'K2 prediction completed successfully',
       stored: true,
       model_type: 'K2'
@@ -282,7 +655,7 @@ const processFile = async (req, res) => {
     readableStream.push(null); // End of the stream
 
     const parserStream = readableStream.pipe(csv({
-      skipComments: true, 
+      skipComments: true,
       skipEmptyLines: true,
       mapValues: ({ header, value }) => {
         const trimmedValue = value ? value.trim() : '';
@@ -292,7 +665,7 @@ const processFile = async (req, res) => {
         return trimmedValue;
       }
     }));
-    
+
     parserStream.on('data', async (rowData) => {
       parserStream.pause();
       totalRows++;
@@ -300,7 +673,7 @@ const processFile = async (req, res) => {
       try {
         const requiredFields = ['pl_orbper', 'pl_trandurh', 'pl_trandep', 'pl_rade'];
         const missingFields = requiredFields.filter(field => rowData[field] === undefined || rowData[field] === null || rowData[field] === '');
-        
+
         if (missingFields.length > 0) {
           errors.push({
             row: totalRows,
@@ -391,7 +764,7 @@ const processFile = async (req, res) => {
         error: err.message
       });
     });
-    
+
   } catch (error) {
     console.error('File Processing Error:', error);
     res.status(500).json({
@@ -404,46 +777,53 @@ const processFile = async (req, res) => {
 };
 
 // ----------------- Custom Models -----------------
+// ... (rest of the file remains the same)
+
+// ----------------- Custom Models -----------------
 const createCustomModel = async (req, res) => {
-  try {
-    const { trainingData, parameters, targetColumn, modelType } = req.body;
-    const userId = req.user.id;
+  try {
+    // MODIFIED: Get file buffer from req.file
+    const file = req.file;
+    const { parameters, targetColumn, modelType } = req.body;
+    const userId = req.user.id;
 
-    console.log(`🎯 Custom model training requested by user ${userId}`);
+    console.log(`🎯 Custom model training requested by user ${userId}`);
 
-    if (!trainingData) {
-      return res.status(400).json({
-        success: false,
-        message: 'Training data is required'
-      });
-    }
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Training file is required'
+      });
+    }
 
-    // Train the model using custom ML service
-    const trainingResult = await trainCustomModel(
-      userId, 
-      trainingData, 
-      { 
-        targetColumn, 
-        modelType, 
-        ...parameters 
-      }
-    );
+    // Train the model using custom ML service
+    const trainingResult = await trainCustomModel(
+      userId,
+      file, // MODIFIED: Pass the file object directly
+      {
+        targetColumn,
+        modelType,
+        ...parameters
+      }
+    );
 
-    res.json({
-      success: true,
-      data: trainingResult,
-      message: 'Custom model trained successfully'
-    });
+    res.json({
+      success: true,
+      data: trainingResult,
+      message: 'Custom model trained successfully'
+    });
 
-  } catch (error) {
-    console.error('Create Custom Model Error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create custom model',
-      error: error.message
-    });
-  }
+  } catch (error) {
+    console.error('Create Custom Model Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create custom model',
+      error: error.message
+    });
+  }
 };
+
+// ... (rest of the file remains the same)
 
 const getCustomModels = async (req, res) => {
   try {
@@ -538,8 +918,8 @@ const predictCustomModel = async (req, res) => {
     res.json({
       success: true,
       data: predictionResult,
-      message: isBulk ? 
-        `Processed ${(predictionResult.predictions || []).length} custom model records` : 
+      message: isBulk ?
+        `Processed ${(predictionResult.predictions || []).length} custom model records` :
         'Custom model prediction completed successfully'
     });
 
@@ -582,7 +962,7 @@ const getEntries = async (req, res) => {
 
     // Build where clause with enhanced filtering
     const where = { userId };
-    
+
     if (search) {
       where.OR = [
         { data: { path: ['metadata', 'predicted_class'], string_contains: search } },
@@ -810,7 +1190,7 @@ const getFileStatus = async (req, res) => {
     // Simulate job status check
     const statuses = ['queued', 'processing', 'completed'];
     const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-    
+
     res.json({
       success: true,
       data: {
@@ -880,12 +1260,12 @@ const getDashboardStats = async (req, res) => {
     const calculateStats = (entries) => {
       const confidences = entries.map(e => e.data.metadata?.confidence).filter(c => c != null);
       const total = confidences.length;
-      
+
       if (total === 0) return { average: 0, highConfidence: 0, total: 0, distribution: {} };
-      
+
       const average = confidences.reduce((a, b) => a + b, 0) / total;
       const highConfidence = confidences.filter(c => c > 0.8).length;
-      
+
       // Calculate distribution
       const distribution = {
         '0-20%': confidences.filter(c => c <= 0.2).length,
@@ -938,8 +1318,8 @@ const getDashboardStats = async (req, res) => {
             toiStats.average + koiStats.average + k2Stats.average
           ) / 3,
           highConfidencePredictions: toiStats.highConfidence + koiStats.highConfidence + k2Stats.highConfidence,
-          userSince: recentPredictions.length > 0 ? 
-            new Date(recentPredictions[recentPredictions.length - 1].createdAt).toLocaleDateString() : 
+          userSince: recentPredictions.length > 0 ?
+            new Date(recentPredictions[recentPredictions.length - 1].createdAt).toLocaleDateString() :
             'New User'
         }
       }
@@ -982,25 +1362,31 @@ module.exports = {
   predictTOI,
   predictKOI,
   predictK2,
-  
+
   // Custom models
   createCustomModel,
   getCustomModels,
   updateCustomModel,
   removeCustomModel,
   predictCustomModel,
-  
+
   // Enhanced entry management
   getEntries,
   updateEntry,
   deleteEntry,
   exportPredictions,
-  
+
   // File processing
   processFile,
   getFileStatus,
-  
+
   // Dashboard & analytics
   getDashboardStats,
-  getModelInformation
+  getModelInformation,
+
+  // Model Performance Tracker
+  getModelPerformance,
+  recordPredictionForTraining,
+  retrainModelWithNewData,
+  getTrainingSuggestions
 };

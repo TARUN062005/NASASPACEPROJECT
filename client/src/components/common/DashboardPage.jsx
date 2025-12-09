@@ -24,7 +24,7 @@ const DashboardPage = ({ user }) => {
         {
             id: "koi",
             title: "Kepler Objects of Interest",
-            description: "Process Kepler Mission candidate data",
+            description: "Analyze Kepler Mission data for exoplanet detection",
             icon: "🌟",
             color: "from-purple-500 to-pink-500",
             route: "/user/dashboard/koi",
@@ -33,20 +33,11 @@ const DashboardPage = ({ user }) => {
         {
             id: "k2",
             title: "K2 Mission Data",
-            description: "Extended Kepler mission exoplanet search",
+            description: "Analyze K2 Mission data for exoplanet detection",
             icon: "🚀",
             color: "from-orange-500 to-red-500",
             route: "/user/dashboard/k2",
             features: ["Multi-field Analysis", "Visual Reports", "Batch Processing"]
-        },
-        {
-            id: "custom",
-            title: "Custom Models",
-            description: "Train and use your own ML models",
-            icon: "🧠",
-            color: "from-green-500 to-emerald-500",
-            route: "/user/dashboard/custom",
-            features: ["Model Training", "Custom Datasets", "Personal Models"]
         }
     ];
 

@@ -2,182 +2,6 @@ import React, { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../../main.jsx";
 
-const TOIDashboard = () => {
-    const navigate = useNavigate();
-    const { API } = useContext(AuthContext);
-    const [activeTab, setActiveTab] = useState("predict");
-    const [predictions, setPredictions] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [modelInfo, setModelInfo] = useState(null);
-    const [bulkResults, setBulkResults] = useState(null);
-
-    const config = {
-        name: "TESS Objects of Interest",
-        description: "TESS Mission data analysis with advanced visualization",
-        color: "blue",
-        icon: "🪐",
-        features: [
-            { name: "pl_orbper", label: "Orbital Period (days)", type: "number", placeholder: "2.1713484" },
-            { name: "pl_trandurh", label: "Transit Duration (hours)", type: "number", placeholder: "2.0172196" },
-            { name: "pl_trandep", label: "Transit Depth (ppm)", type: "number", placeholder: "656.8860989" },
-            { name: "pl_rade", label: "Planet Radius (Earth radii)", type: "number", placeholder: "5.8181633" },
-            { name: "pl_insol", label: "Insolation Flux (Earth flux)", type: "number", placeholder: "22601.94858" },
-            { name: "pl_eqt", label: "Equilibrium Temperature (K)", type: "number", placeholder: "3127.204052" },
-            { name: "st_tmag", label: "TESS Magnitude", type: "number", placeholder: "9.604" },
-            { name: "st_dist", label: "Star Distance (pc)", type: "number", placeholder: "485.735" },
-            { name: "st_teff", label: "Star Temperature (K)", type: "number", placeholder: "10249" },
-            { name: "st_logg", label: "Star Surface Gravity (log g)", type: "number", placeholder: "4.19" },
-            { name: "st_rad", label: "Star Radius (Solar radii)", type: "number", placeholder: "2.16986" }
-        ],
-        sampleData: {
-            pl_orbper: 2.1713484,
-            pl_trandurh: 2.0172196,
-            pl_trandep: 656.8860989,
-            pl_rade: 5.8181633,
-            pl_insol: 22601.94858,
-            pl_eqt: 3127.204052,
-            st_tmag: 9.604,
-            st_dist: 485.735,
-            st_teff: 10249,
-            st_logg: 4.19,
-            st_rad: 2.16986
-        }
-    };
-
-    useEffect(() => {
-        fetchModelInfo();
-        if (activeTab === "history") {
-            fetchPredictionHistory();
-        }
-    }, [activeTab]);
-
-    const fetchModelInfo = async () => {
-        try {
-            const response = await API.get("/api/ml/model-info/toi");
-            setModelInfo(response.data.data);
-        } catch (error) {
-            console.error("Failed to fetch TOI model info:", error);
-            setModelInfo({
-                model_type: "Ensemble Classifier",
-                is_trained: true,
-                class_names: ["FP", "PC", "KP", "CP", "APC", "FA"],
-                selected_features: config.features.map(f => f.name),
-                target_column: "tfopwg_disp"
-            });
-        }
-    };
-
-    const fetchPredictionHistory = async () => {
-        try {
-            setLoading(true);
-            const response = await API.get("/api/ml/entries/toi?limit=20");
-            setPredictions(response.data.data.entries || []);
-        } catch (error) {
-            console.error("Failed to fetch TOI prediction history:", error);
-            setPredictions([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleExport = async (format = 'csv') => {
-        try {
-            const response = await API.get(`/api/ml/export/toi?format=${format}`, {
-                responseType: 'blob',
-                // Increased timeout to 5 minutes to prevent network timeouts on large files
-                timeout: 300000 
-            });
-
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            
-            // Use the correct file extension
-            const extension = format === 'excel' ? 'xlsx' : 'csv';
-            link.setAttribute('download', `toi_predictions_${Date.now()}.${extension}`);
-            
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
-            
-        } catch (error) {
-            console.error("Export failed:", error);
-            const errorMessage = error.message.includes('timeout') 
-                ? "The download timed out. The file may be too large or the network is slow. Please try again."
-                : (error.response?.data?.message || error.message || "An unexpected error occurred during export.");
-            alert("Export failed: " + errorMessage);
-        }
-    };
-
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-6">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <button
-                            onClick={() => navigate("/user/dashboard")}
-                            className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors mb-4"
-                        >
-                            <span>←</span>
-                            <span>Back to Dashboard</span>
-                        </button>
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                            {config.name}
-                        </h1>
-                        <p className="text-gray-400 mt-2">{config.description}</p>
-                    </div>
-                    <div className="text-6xl">
-                        {config.icon}
-                    </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="flex space-x-1 bg-gray-800 rounded-lg p-1 mb-8">
-                    {["predict", "bulk", "history", "info"].map((tab) => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            className={`flex-1 py-3 px-6 rounded-md font-semibold transition-all ${
-                                activeTab === tab
-                                    ? "bg-blue-600 text-white shadow-lg"
-                                    : "text-gray-400 hover:text-white"
-                            }`}
-                        >
-                            {tab === "predict" && "🔮 Single Prediction"}
-                            {tab === "bulk" && "📁 Bulk Analysis"}
-                            {tab === "history" && "📊 History"}
-                            {tab === "info" && "ℹ️ Model Info"}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Tab Content */}
-                <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
-                    {activeTab === "predict" && (
-                        <PredictionTab config={config} API={API} modelInfo={modelInfo} />
-                    )}
-                    {activeTab === "bulk" && (
-                        <BulkTab config={config} API={API} onResults={setBulkResults} onExport={handleExport} />
-                    )}
-                    {activeTab === "history" && (
-                        <HistoryTab
-                            predictions={predictions}
-                            loading={loading}
-                            onRefresh={fetchPredictionHistory}
-                            onExport={handleExport}
-                        />
-                    )}
-                    {activeTab === "info" && (
-                        <InfoTab config={config} modelInfo={modelInfo} />
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // Single Prediction Tab
 const PredictionTab = ({ config, API, modelInfo }) => {
     const [predictionData, setPredictionData] = useState({});
@@ -237,6 +61,56 @@ const PredictionTab = ({ config, API, modelInfo }) => {
         setError(null);
         setPredictionTime(null);
     };
+    
+    // New refresh function
+    const generateRandomData = () => {
+        const newData = {};
+        config.features.forEach(feature => {
+            let randomValue;
+            // Generate random values within a plausible range for each feature
+            switch (feature.name) {
+                case "pl_orbper":
+                    randomValue = (Math.random() * (100 - 0.5) + 0.5).toFixed(3);
+                    break;
+                case "pl_trandurh":
+                    randomValue = (Math.random() * (10 - 0.1) + 0.1).toFixed(2);
+                    break;
+                case "pl_trandep":
+                    randomValue = (Math.random() * (5000 - 10) + 10).toFixed(2);
+                    break;
+                case "pl_rade":
+                    randomValue = (Math.random() * (10 - 0.5) + 0.5).toFixed(2);
+                    break;
+                case "pl_insol":
+                    randomValue = (Math.random() * (50000 - 100) + 100).toFixed(2);
+                    break;
+                case "pl_eqt":
+                    randomValue = (Math.random() * (5000 - 200) + 200).toFixed(2);
+                    break;
+                case "st_tmag":
+                    randomValue = (Math.random() * (15 - 5) + 5).toFixed(2);
+                    break;
+                case "st_dist":
+                    randomValue = (Math.random() * (1000 - 10) + 10).toFixed(2);
+                    break;
+                case "st_teff":
+                    randomValue = (Math.random() * (15000 - 2000) + 2000).toFixed(0);
+                    break;
+                case "st_logg":
+                    randomValue = (Math.random() * (5 - 3) + 3).toFixed(2);
+                    break;
+                case "st_rad":
+                    randomValue = (Math.random() * (5 - 0.5) + 0.5).toFixed(2);
+                    break;
+                default:
+                    randomValue = (Math.random() * 100).toFixed(2);
+            }
+            newData[feature.name] = parseFloat(randomValue);
+        });
+        setPredictionData(newData);
+        setResult(null);
+        setError(null);
+    };
 
     const getClassColor = (className) => {
         const colors = {
@@ -281,6 +155,13 @@ const PredictionTab = ({ config, API, modelInfo }) => {
                                 className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
                             >
                                 Load Sample
+                            </button>
+                            {/* New refresh button */}
+                            <button
+                                onClick={generateRandomData}
+                                className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                            >
+                                Refresh Values
                             </button>
                             <button
                                 onClick={clearForm}
@@ -1019,5 +900,179 @@ const InfoTab = ({ config, modelInfo }) => (
         </div>
     </div>
 );
+
+const TOIDashboard = () => {
+    const navigate = useNavigate();
+    const { API } = useContext(AuthContext);
+    const [activeTab, setActiveTab] = useState("predict");
+    const [predictions, setPredictions] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [modelInfo, setModelInfo] = useState(null);
+    const [bulkResults, setBulkResults] = useState(null);
+
+    const config = {
+        name: "TESS Objects of Interest",
+        description: "TESS Mission data analysis with advanced visualization",
+        color: "blue",
+        icon: "🪐",
+        features: [
+            { name: "pl_orbper", label: "Orbital Period (days)", type: "number", placeholder: "2.1713484" },
+            { name: "pl_trandurh", label: "Transit Duration (hours)", type: "number", placeholder: "2.0172196" },
+            { name: "pl_trandep", label: "Transit Depth (ppm)", type: "number", placeholder: "656.8860989" },
+            { name: "pl_rade", label: "Planet Radius (Earth radii)", type: "number", placeholder: "5.8181633" },
+            { name: "pl_insol", label: "Insolation Flux (Earth flux)", type: "number", placeholder: "22601.94858" },
+            { name: "pl_eqt", label: "Equilibrium Temperature (K)", type: "number", placeholder: "3127.204052" },
+            { name: "st_tmag", label: "TESS Magnitude", type: "number", placeholder: "9.604" },
+            { name: "st_dist", label: "Star Distance (pc)", type: "number", placeholder: "485.735" },
+            { name: "st_teff", label: "Star Temperature (K)", type: "number", placeholder: "10249" },
+            { name: "st_logg", label: "Star Surface Gravity (log g)", type: "number", placeholder: "4.19" },
+            { name: "st_rad", label: "Star Radius (Solar radii)", type: "number", placeholder: "2.16986" }
+        ],
+        sampleData: {
+            pl_orbper: 2.1713484,
+            pl_trandurh: 2.0172196,
+            pl_trandep: 656.8860989,
+            pl_rade: 5.8181633,
+            pl_insol: 22601.94858,
+            pl_eqt: 3127.204052,
+            st_tmag: 9.604,
+            st_dist: 485.735,
+            st_teff: 10249,
+            st_logg: 4.19,
+            st_rad: 2.16986
+        }
+    };
+
+    const fetchModelInfo = async () => {
+        try {
+            const response = await API.get("/api/ml/model-info/toi");
+            setModelInfo(response.data.data);
+        } catch (error) {
+            console.error("Failed to fetch TOI model info:", error);
+            setModelInfo({
+                model_type: "Ensemble Classifier",
+                is_trained: true,
+                class_names: ["FP", "PC", "KP", "CP", "APC", "FA"],
+                selected_features: config.features.map(f => f.name),
+                target_column: "tfopwg_disp"
+            });
+        }
+    };
+
+    const fetchPredictionHistory = async () => {
+        try {
+            setLoading(true);
+            const response = await API.get("/api/ml/entries/toi?limit=20");
+            setPredictions(response.data.data.entries || []);
+        } catch (error) {
+            console.error("Failed to fetch TOI prediction history:", error);
+            setPredictions([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExport = async (format = 'csv') => {
+        try {
+            const response = await API.get(`/api/ml/export/toi?format=${format}`, {
+                responseType: 'blob',
+                timeout: 300000
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            
+            const extension = format === 'excel' ? 'xlsx' : 'csv';
+            link.setAttribute('download', `toi_predictions_${Date.now()}.${extension}`);
+            
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            
+        } catch (error) {
+            console.error("Export failed:", error);
+            const errorMessage = error.message.includes('timeout')
+                ? "The download timed out. The file may be too large or the network is slow. Please try again."
+                : (error.response?.data?.message || error.message || "An unexpected error occurred during export.");
+            alert("Export failed: " + errorMessage);
+        }
+    };
+
+    useEffect(() => {
+        fetchModelInfo();
+        if (activeTab === "history") {
+            fetchPredictionHistory();
+        }
+    }, [activeTab]);
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-6">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <button
+                            onClick={() => navigate("/user/dashboard")}
+                            className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors mb-4"
+                        >
+                            <span>←</span>
+                            <span>Back to Dashboard</span>
+                        </button>
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                            {config.name}
+                        </h1>
+                        <p className="text-gray-400 mt-2">{config.description}</p>
+                    </div>
+                    <div className="text-6xl">
+                        {config.icon}
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex space-x-1 bg-gray-800 rounded-lg p-1 mb-8">
+                    {["predict", "bulk", "history", "info"].map((tab) => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`flex-1 py-3 px-6 rounded-md font-semibold transition-all ${
+                                activeTab === tab
+                                    ? "bg-blue-600 text-white shadow-lg"
+                                    : "text-gray-400 hover:text-white"
+                            }`}
+                        >
+                            {tab === "predict" && "🔮 Single Prediction"}
+                            {tab === "bulk" && "📁 Bulk Analysis"}
+                            {tab === "history" && "📊 History"}
+                            {tab === "info" && "ℹ️ Model Info"}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Tab Content */}
+                <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+                    {activeTab === "predict" && (
+                        <PredictionTab config={config} API={API} modelInfo={modelInfo} />
+                    )}
+                    {activeTab === "bulk" && (
+                        <BulkTab config={config} API={API} onResults={setBulkResults} onExport={handleExport} />
+                    )}
+                    {activeTab === "history" && (
+                        <HistoryTab
+                            predictions={predictions}
+                            loading={loading}
+                            onRefresh={fetchPredictionHistory}
+                            onExport={handleExport}
+                        />
+                    )}
+                    {activeTab === "info" && (
+                        <InfoTab config={config} modelInfo={modelInfo} />
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default TOIDashboard;

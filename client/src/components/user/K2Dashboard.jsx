@@ -2,186 +2,6 @@ import React, { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../../main.jsx";
 
-const K2Dashboard = () => {
-    const navigate = useNavigate();
-    const { API } = useContext(AuthContext);
-    const [activeTab, setActiveTab] = useState("predict");
-    const [predictions, setPredictions] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [modelInfo, setModelInfo] = useState(null);
-    const [bulkResults, setBulkResults] = useState(null);
-
-    const config = {
-        name: "K2 Mission Data",
-        description: "K2 Mission extended exoplanet search with comprehensive analysis",
-        color: "orange",
-        icon: "🚀",
-        features: [
-            { name: "pl_orbper", label: "Orbital Period (days)", type: "number", placeholder: "41.688644" },
-            { name: "pl_orbsmax", label: "Orbital Semi-Major Axis (AU)", type: "number", placeholder: "0.241" },
-            { name: "pl_rade", label: "Planet Radius (Earth radii)", type: "number", placeholder: "2.23" },
-            { name: "pl_bmasse", label: "Planet Mass (Earth masses)", type: "number", placeholder: "16.3" },
-            { name: "pl_orbeccen", label: "Orbital Eccentricity", type: "number", placeholder: "0.0" },
-            { name: "pl_insol", label: "Insolation Flux (Earth flux)", type: "number", placeholder: "546.0" },
-            { name: "pl_eqt", label: "Equilibrium Temperature (K)", type: "number", placeholder: "793.0" },
-            { name: "st_teff", label: "Star Temperature (K)", type: "number", placeholder: "5766" },
-            { name: "st_rad", label: "Star Radius (Solar radii)", type: "number", placeholder: "0.928" },
-            { name: "st_mass", label: "Star Mass (Solar masses)", type: "number", placeholder: "0.961" },
-            { name: "st_met", label: "Star Metallicity [Fe/H]", type: "number", placeholder: "-0.15" },
-            { name: "st_logg", label: "Star Surface Gravity (log g)", type: "number", placeholder: "4.5" },
-            { name: "sy_dist", label: "System Distance (pc)", type: "number", placeholder: "179.461" },
-            { name: "sy_vmag", label: "Visual Magnitude", type: "number", placeholder: "10.849" }
-        ],
-        sampleData: {
-            pl_orbper: 41.688644,
-            pl_orbsmax: 0.241,
-            pl_rade: 2.23,
-            pl_bmasse: 16.3,
-            pl_orbeccen: 0.0,
-            pl_insol: 546.0,
-            pl_eqt: 793.0,
-            st_teff: 5766,
-            st_rad: 0.928,
-            st_mass: 0.961,
-            st_met: -0.15,
-            st_logg: 4.5,
-            sy_dist: 179.461,
-            sy_vmag: 10.849
-        }
-    };
-
-    useEffect(() => {
-        fetchModelInfo();
-        if (activeTab === "history") {
-            fetchPredictionHistory();
-        }
-    }, [activeTab]);
-
-    const fetchModelInfo = async () => {
-        try {
-            const response = await API.get("/api/ml/model-info/k2");
-            setModelInfo(response.data.data);
-        } catch (error) {
-            console.error("Failed to fetch K2 model info:", error);
-            setModelInfo({
-                model_type: "Ensemble Classifier",
-                is_trained: true,
-                class_names: ["CONFIRMED", "CANDIDATE", "FALSE POSITIVE"],
-                selected_features: config.features.map(f => f.name),
-                target_column: "disposition"
-            });
-        }
-    };
-
-    const fetchPredictionHistory = async () => {
-        try {
-            setLoading(true);
-            const response = await API.get("/api/ml/entries/k2?limit=20");
-            setPredictions(response.data.data.entries || []);
-        } catch (error) {
-            console.error("Failed to fetch K2 prediction history:", error);
-            setPredictions([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleExport = async (format = 'csv') => {
-        try {
-            const response = await API.get(`/api/ml/export/k2?format=${format}`, {
-                responseType: 'blob',
-                timeout: 300000 // 5 minutes for large files
-            });
-
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-
-            const extension = format === 'excel' ? 'xlsx' : 'csv';
-            link.setAttribute('download', `k2_predictions_${Date.now()}.${extension}`);
-
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(url);
-
-        } catch (error) {
-            console.error("Export failed:", error);
-            const errorMessage = error.message.includes('timeout')
-                ? "The download timed out. The file may be too large or the network is slow. Please try again."
-                : (error.response?.data?.message || error.message || "An unexpected error occurred during export.");
-            alert("Export failed: " + errorMessage);
-        }
-    };
-
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-6">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <button
-                            onClick={() => navigate("/user/dashboard")}
-                            className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors mb-4"
-                        >
-                            <span>←</span>
-                            <span>Back to Dashboard</span>
-                        </button>
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
-                            {config.name}
-                        </h1>
-                        <p className="text-gray-400 mt-2">{config.description}</p>
-                    </div>
-                    <div className="text-6xl">
-                        {config.icon}
-                    </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="flex space-x-1 bg-gray-800 rounded-lg p-1 mb-8">
-                    {["predict", "bulk", "history", "info"].map((tab) => (
-                        <button
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            className={`flex-1 py-3 px-6 rounded-md font-semibold transition-all ${
-                                activeTab === tab
-                                    ? "bg-orange-600 text-white shadow-lg"
-                                    : "text-gray-400 hover:text-white"
-                            }`}
-                        >
-                            {tab === "predict" && "🔮 Single Prediction"}
-                            {tab === "bulk" && "📁 Bulk Analysis"}
-                            {tab === "history" && "📊 History"}
-                            {tab === "info" && "ℹ️ Model Info"}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Tab Content */}
-                <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
-                    {activeTab === "predict" && (
-                        <PredictionTab config={config} API={API} modelInfo={modelInfo} />
-                    )}
-                    {activeTab === "bulk" && (
-                        <BulkTab config={config} API={API} onResults={setBulkResults} onExport={handleExport} />
-                    )}
-                    {activeTab === "history" && (
-                        <HistoryTab
-                            predictions={predictions}
-                            loading={loading}
-                            onRefresh={fetchPredictionHistory}
-                            onExport={handleExport}
-                        />
-                    )}
-                    {activeTab === "info" && (
-                        <InfoTab config={config} modelInfo={modelInfo} />
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
 // Single Prediction Tab for K2
 const PredictionTab = ({ config, API, modelInfo }) => {
     const [predictionData, setPredictionData] = useState({});
@@ -241,6 +61,65 @@ const PredictionTab = ({ config, API, modelInfo }) => {
         setError(null);
         setPredictionTime(null);
     };
+    
+    // New refresh function
+    const generateRandomData = () => {
+        const newData = {};
+        config.features.forEach(feature => {
+            let randomValue;
+            // Generate random values within a plausible range for each feature
+            switch (feature.name) {
+                case "pl_orbper":
+                    randomValue = (Math.random() * (500 - 1) + 1).toFixed(5);
+                    break;
+                case "pl_orbsmax":
+                    randomValue = (Math.random() * (5 - 0.01) + 0.01).toFixed(3);
+                    break;
+                case "pl_rade":
+                    randomValue = (Math.random() * (20 - 0.5) + 0.5).toFixed(2);
+                    break;
+                case "pl_bmasse":
+                    randomValue = (Math.random() * (100 - 1) + 1).toFixed(1);
+                    break;
+                case "pl_orbeccen":
+                    randomValue = (Math.random() * (0.9 - 0) + 0).toFixed(2);
+                    break;
+                case "pl_insol":
+                    randomValue = (Math.random() * (10000 - 1) + 1).toFixed(1);
+                    break;
+                case "pl_eqt":
+                    randomValue = (Math.random() * (3000 - 200) + 200).toFixed(1);
+                    break;
+                case "st_teff":
+                    randomValue = (Math.random() * (10000 - 3000) + 3000).toFixed(0);
+                    break;
+                case "st_rad":
+                    randomValue = (Math.random() * (5 - 0.5) + 0.5).toFixed(3);
+                    break;
+                case "st_mass":
+                    randomValue = (Math.random() * (3 - 0.1) + 0.1).toFixed(3);
+                    break;
+                case "st_met":
+                    randomValue = (Math.random() * (1 - (-1)) + (-1)).toFixed(2);
+                    break;
+                case "st_logg":
+                    randomValue = (Math.random() * (5 - 3) + 3).toFixed(2);
+                    break;
+                case "sy_dist":
+                    randomValue = (Math.random() * (1000 - 10) + 10).toFixed(3);
+                    break;
+                case "sy_vmag":
+                    randomValue = (Math.random() * (20 - 8) + 8).toFixed(3);
+                    break;
+                default:
+                    randomValue = (Math.random() * 100).toFixed(2);
+            }
+            newData[feature.name] = parseFloat(randomValue);
+        });
+        setPredictionData(newData);
+        setResult(null);
+        setError(null);
+    };
 
     const getClassColor = (className) => {
         const colors = {
@@ -279,6 +158,13 @@ const PredictionTab = ({ config, API, modelInfo }) => {
                                 className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition-colors"
                             >
                                 Load Sample
+                            </button>
+                            {/* New refresh button */}
+                            <button
+                                onClick={generateRandomData}
+                                className="px-3 py-1 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700 transition-colors"
+                            >
+                                Refresh Values
                             </button>
                             <button
                                 onClick={clearForm}
@@ -517,7 +403,7 @@ const BulkTab = ({ config, API, onResults, onExport }) => {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 },
-                timeout: 300000 // 5 minutes for large files
+                timeout: 300000
             });
 
             clearInterval(progressInterval);
@@ -574,7 +460,7 @@ const BulkTab = ({ config, API, onResults, onExport }) => {
                             <div className="text-4xl mb-4">📁</div>
                             <p className="text-gray-300 mb-2">Upload CSV File</p>
                             <p className="text-gray-400 text-sm mb-4">
-                                File should contain columns: {config.features.map(f => f.name).join(', ')}
+                                Supports large files (up to 100MB, 100,000+ rows)
                             </p>
 
                             <input
@@ -798,7 +684,7 @@ const BulkTab = ({ config, API, onResults, onExport }) => {
                         <div className="text-center py-12 text-gray-400">
                             <div className="text-6xl mb-4">📈</div>
                             <p>Upload a CSV file to process multiple K2 observations</p>
-                            <p className="text-sm mt-2">Batch processing with automatic storage</p>
+                            <p className="text-sm mt-2">Supports large datasets with 100,000+ rows</p>
                         </div>
                     )}
                 </div>
@@ -1020,5 +906,185 @@ const InfoTab = ({ config, modelInfo }) => (
         </div>
     </div>
 );
+
+const K2Dashboard = () => {
+    const navigate = useNavigate();
+    const { API } = useContext(AuthContext);
+    const [activeTab, setActiveTab] = useState("predict");
+    const [predictions, setPredictions] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [modelInfo, setModelInfo] = useState(null);
+    const [bulkResults, setBulkResults] = useState(null);
+
+    const config = {
+        name: "K2 Mission Data",
+        description: "K2 Mission extended exoplanet search with comprehensive analysis",
+        color: "orange",
+        icon: "🚀",
+        features: [
+            { name: "pl_orbper", label: "Orbital Period (days)", type: "number", placeholder: "41.688644" },
+            { name: "pl_orbsmax", label: "Orbital Semi-Major Axis (AU)", type: "number", placeholder: "0.241" },
+            { name: "pl_rade", label: "Planet Radius (Earth radii)", type: "number", placeholder: "2.23" },
+            { name: "pl_bmasse", label: "Planet Mass (Earth masses)", type: "number", placeholder: "16.3" },
+            { name: "pl_orbeccen", label: "Orbital Eccentricity", type: "number", placeholder: "0.0" },
+            { name: "pl_insol", label: "Insolation Flux (Earth flux)", type: "number", placeholder: "546.0" },
+            { name: "pl_eqt", label: "Equilibrium Temperature (K)", type: "number", placeholder: "793.0" },
+            { name: "st_teff", label: "Star Temperature (K)", type: "number", placeholder: "5766" },
+            { name: "st_rad", label: "Star Radius (Solar radii)", type: "number", placeholder: "0.928" },
+            { name: "st_mass", label: "Star Mass (Solar masses)", type: "number", placeholder: "0.961" },
+            { name: "st_met", label: "Star Metallicity [Fe/H]", type: "number", placeholder: "-0.15" },
+            { name: "st_logg", label: "Star Surface Gravity (log g)", type: "number", placeholder: "4.5" },
+            { name: "sy_dist", label: "System Distance (pc)", type: "number", placeholder: "179.461" },
+            { name: "sy_vmag", label: "Visual Magnitude", type: "number", placeholder: "10.849" }
+        ],
+        sampleData: {
+            pl_orbper: 41.688644,
+            pl_orbsmax: 0.241,
+            pl_rade: 2.23,
+            pl_bmasse: 16.3,
+            pl_orbeccen: 0.0,
+            pl_insol: 546.0,
+            pl_eqt: 793.0,
+            st_teff: 5766,
+            st_rad: 0.928,
+            st_mass: 0.961,
+            st_met: -0.15,
+            st_logg: 4.5,
+            sy_dist: 179.461,
+            sy_vmag: 10.849
+        }
+    };
+
+    const fetchModelInfo = async () => {
+        try {
+            const response = await API.get("/api/ml/model-info/k2");
+            setModelInfo(response.data.data);
+        } catch (error) {
+            console.error("Failed to fetch K2 model info:", error);
+            setModelInfo({
+                model_type: "Ensemble Classifier",
+                is_trained: true,
+                class_names: ["CONFIRMED", "CANDIDATE", "FALSE POSITIVE"],
+                selected_features: config.features.map(f => f.name),
+                target_column: "disposition"
+            });
+        }
+    };
+
+    const fetchPredictionHistory = async () => {
+        try {
+            setLoading(true);
+            const response = await API.get("/api/ml/entries/k2?limit=20");
+            setPredictions(response.data.data.entries || []);
+        } catch (error) {
+            console.error("Failed to fetch K2 prediction history:", error);
+            setPredictions([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleExport = async (format = 'csv') => {
+        try {
+            const response = await API.get(`/api/ml/export/k2?format=${format}`, {
+                responseType: 'blob',
+                timeout: 300000
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+
+            const extension = format === 'excel' ? 'xlsx' : 'csv';
+            link.setAttribute('download', `k2_predictions_${Date.now()}.${extension}`);
+
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+
+        } catch (error) {
+            console.error("Export failed:", error);
+            const errorMessage = error.message.includes('timeout')
+                ? "The download timed out. The file may be too large or the network is slow. Please try again."
+                : (error.response?.data?.message || error.message || "An unexpected error occurred during export.");
+            alert("Export failed: " + errorMessage);
+        }
+    };
+
+    useEffect(() => {
+        fetchModelInfo();
+        if (activeTab === "history") {
+            fetchPredictionHistory();
+        }
+    }, [activeTab]);
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 to-black text-white p-6">
+            <div className="max-w-7xl mx-auto">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <button
+                            onClick={() => navigate("/user/dashboard")}
+                            className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors mb-4"
+                        >
+                            <span>←</span>
+                            <span>Back to Dashboard</span>
+                        </button>
+                        <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
+                            {config.name}
+                        </h1>
+                        <p className="text-gray-400 mt-2">{config.description}</p>
+                    </div>
+                    <div className="text-6xl">
+                        {config.icon}
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex space-x-1 bg-gray-800 rounded-lg p-1 mb-8">
+                    {["predict", "bulk", "history", "info"].map((tab) => (
+                        <button
+                            key={tab}
+                            onClick={() => setActiveTab(tab)}
+                            className={`flex-1 py-3 px-6 rounded-md font-semibold transition-all ${
+                                activeTab === tab
+                                    ? "bg-orange-600 text-white shadow-lg"
+                                    : "text-gray-400 hover:text-white"
+                            }`}
+                        >
+                            {tab === "predict" && "🔮 Single Prediction"}
+                            {tab === "bulk" && "📁 Bulk Analysis"}
+                            {tab === "history" && "📊 History"}
+                            {tab === "info" && "ℹ️ Model Info"}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Tab Content */}
+                <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+                    {activeTab === "predict" && (
+                        <PredictionTab config={config} API={API} modelInfo={modelInfo} />
+                    )}
+                    {activeTab === "bulk" && (
+                        <BulkTab config={config} API={API} onResults={setBulkResults} onExport={handleExport} />
+                    )}
+                    {activeTab === "history" && (
+                        <HistoryTab
+                            predictions={predictions}
+                            loading={loading}
+                            onRefresh={fetchPredictionHistory}
+                            onExport={handleExport}
+                        />
+                    )}
+                    {activeTab === "info" && (
+                        <InfoTab config={config} modelInfo={modelInfo} />
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default K2Dashboard;

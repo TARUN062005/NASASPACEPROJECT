@@ -1,5 +1,4 @@
-// server/utils/mlUtils.js
-
+// server/utils/mlUtils.js - FIXED VERSION
 const axios = require('axios');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
@@ -17,8 +16,6 @@ const ML_SERVICES = {
 
 /**
  * Returns a human-readable description for a given class name.
- * @param {string} className The abbreviated class name (e.g., 'FP', 'PC').
- * @returns {string} The full description.
  */
 const getClassDescription = (className) => {
     const descriptions = {
@@ -33,9 +30,7 @@ const getClassDescription = (className) => {
 };
 
 /**
- * Flattens a nested database entry into a single-level, human-readable object.
- * @param {object} entry The raw prediction entry from the database.
- * @returns {object} A flattened object with meaningful keys.
+ * Flattens a nested database entry into a single-level object.
  */
 const getFlattenedData = (entry) => {
     const inputData = entry.data?.input || {};
@@ -55,10 +50,10 @@ const getFlattenedData = (entry) => {
         }),
         'Model Type': metadata.model_type || 'N/A',
         'Predicted Class': outputData.predicted_class || 'N/A',
-        'Confidence': outputData.confidence !== undefined && outputData.confidence !== null ? (outputData.confidence * 100).toFixed(2) + '%' : 'N/A',
+        'Confidence': outputData.confidence !== undefined && outputData.confidence !== null ? 
+            (outputData.confidence * 100).toFixed(2) + '%' : 'N/A',
         'Explanation': outputData.explanation || 'No explanation available',
         'Is Mock Data': metadata.is_mock ? 'Yes' : 'No',
-        // Add individual input features dynamically
         ...Object.keys(inputData).reduce((acc, key) => {
             acc[key] = inputData[key];
             return acc;
@@ -67,7 +62,67 @@ const getFlattenedData = (entry) => {
     return flattened;
 };
 
-// ----------------- Prediction Functions -----------------
+// ----------------- Fixed KOI Prediction Function -----------------
+
+const predictWithKOI = async (data) => {
+    try {
+        console.log(`🔮 Making KOI prediction request to: ${ML_SERVICES.KOI}/predict`);
+        
+        // Try format 1: data directly (new server expects this)
+        let response;
+        try {
+            response = await axios.post(`${ML_SERVICES.KOI}/predict`, data, {
+                timeout: 30000,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            });
+        } catch (error1) {
+            // Try format 2: wrapped in data object
+            console.log('🔄 Trying alternative format...');
+            response = await axios.post(`${ML_SERVICES.KOI}/predict`, { 
+                data: data
+            }, {
+                timeout: 30000,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+        
+        console.log('✅ KOI prediction successful');
+        
+        // Handle the new response format
+        const responseData = response.data;
+        
+        // Check if diagrams are available
+        if (responseData.diagrams && responseData.diagrams.available) {
+            console.log(`📊 ${responseData.diagrams.count} diagrams generated`);
+        }
+        
+        return {
+            prediction: responseData.prediction || responseData.data?.prediction || responseData,
+            success: responseData.success || true,
+            diagrams: responseData.diagrams || null,
+            data: {
+                prediction: responseData.prediction || responseData.data?.prediction || responseData,
+                is_mock: responseData.prediction?.is_mock || false
+            }
+        };
+        
+    } catch (error) {
+        console.error('❌ KOI Service Error:', error.message);
+        
+        if (error.response) {
+            console.error('Response data:', error.response.data);
+            console.error('Response status:', error.response.status);
+        }
+        
+        // Return mock prediction
+        console.log('🔄 Returning mock prediction');
+        return generateMockPrediction(data, 'KOI');
+    }
+};
+// ----------------- Other Prediction Functions -----------------
 
 const predictWithTOI = async (data) => {
     try {
@@ -87,27 +142,6 @@ const predictWithTOI = async (data) => {
             return generateMockPrediction(data, 'TOI');
         }
         throw new Error(`TOI prediction failed: ${error.response?.data?.error || error.message}`);
-    }
-};
-
-const predictWithKOI = async (data) => {
-    try {
-        console.log(`🔮 Making KOI prediction request to: ${ML_SERVICES.KOI}/predict`);
-        const response = await axios.post(`${ML_SERVICES.KOI}/predict`, data, {
-            timeout: 30000,
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        console.log('✅ KOI prediction successful');
-        return response.data;
-    } catch (error) {
-        console.error('❌ KOI Service Error:', error.message);
-        if (error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
-            console.log('🔄 KOI service unavailable, returning mock response');
-            return generateMockPrediction(data, 'KOI');
-        }
-        throw new Error(`KOI prediction failed: ${error.response?.data?.error || error.message}`);
     }
 };
 
@@ -132,17 +166,43 @@ const predictWithK2 = async (data) => {
     }
 };
 
+// ----------------- Mock Prediction Generator -----------------
+
 const generateMockPrediction = (data, modelType) => {
-    const classes = ['FP', 'PC', 'KP', 'CP', 'APC', 'FA'];
+    let classes, descriptions;
+    
+    if (modelType === 'KOI' || modelType === 'koi') {
+        // Use actual classes from trained model
+        classes = ['CANDIDATE', 'CONFIRMED', 'FALSE POSITIVE'];
+        descriptions = {
+            'CONFIRMED': 'Confirmed Exoplanet',
+            'CANDIDATE': 'Planetary Candidate',
+            'FALSE POSITIVE': 'False Positive'
+        };
+    } else {
+        classes = ['FP', 'PC', 'KP', 'CP', 'APC', 'FA'];
+        descriptions = {
+            'FP': 'False Positive',
+            'PC': 'Planetary Candidate',
+            'KP': 'Known Planet',
+            'CP': 'Confirmed Planet',
+            'APC': 'Ambiguous Planetary Candidate',
+            'FA': 'False Alarm'
+        };
+    }
+    
     const predictedClass = classes[Math.floor(Math.random() * classes.length)];
     const confidence = (0.7 + Math.random() * 0.25).toFixed(3);
     
     const probabilities = {};
     classes.forEach(cls => {
-        probabilities[cls] = (cls === predictedClass) ? parseFloat(confidence) : parseFloat(((1 - confidence) / (classes.length - 1)).toFixed(3));
+        probabilities[cls] = (cls === predictedClass) ? parseFloat(confidence) : 
+            parseFloat(((1 - confidence) / (classes.length - 1)).toFixed(3));
     });
     
-    const explanation = `Mock ${modelType} prediction: ${getClassDescription(predictedClass)}. This is a simulated response while the ML service is unavailable.`;
+    const explanation = modelType === 'KOI' || modelType === 'koi'
+        ? `Mock KOI prediction: ${descriptions[predictedClass]}. This is a simulated response while the ML service is unavailable.`
+        : `Mock ${modelType} prediction: ${descriptions[predictedClass]}. This is a simulated response while the ML service is unavailable.`;
     
     return {
         prediction: {
@@ -154,11 +214,25 @@ const generateMockPrediction = (data, modelType) => {
             model_type: modelType
         },
         success: true,
-        message: `Mock ${modelType} prediction completed (service unavailable)`
+        message: `Mock ${modelType} prediction completed (service unavailable)`,
+        diagrams: null,
+        data: {
+            prediction: {
+                predicted_class: predictedClass,
+                confidence: parseFloat(confidence),
+                probabilities: probabilities,
+                explanation: explanation,
+                is_mock: true,
+                model_type: modelType
+            },
+            is_mock: true
+        },
+        isMock: true
     };
 };
 
 // ----------------- Enhanced Data Storage -----------------
+
 const storePrediction = async (userId, modelType, inputData, predictionResult) => {
     try {
         const storageData = {
@@ -224,7 +298,7 @@ const storePrediction = async (userId, modelType, inputData, predictionResult) =
     }
 };
 
-// ----------------- Export Functions (Updated) -----------------
+// ----------------- Export Functions -----------------
 
 const generateCSVExport = async (modelType, entries) => {
     try {
@@ -334,6 +408,7 @@ const generateExcelExport = async (modelType, entries) => {
 };
 
 // ----------------- Enhanced Entry Management -----------------
+
 const getEntriesForExport = async (userId, modelType, filters = {}) => {
     try {
         let model;
@@ -392,11 +467,15 @@ const getEntriesForExport = async (userId, modelType, filters = {}) => {
 };
 
 // ----------------- Service Health Checks -----------------
+
 const checkMLServices = async () => {
     const services = {};
+    
     for (const [serviceName, serviceUrl] of Object.entries(ML_SERVICES)) {
         try {
-            const response = await axios.get(`${serviceUrl}/health`, { timeout: 5000 });
+            const response = await axios.get(`${serviceUrl}/health`, { 
+                timeout: 5000 
+            });
             services[serviceName] = {
                 status: 'healthy',
                 url: serviceUrl,
@@ -410,6 +489,7 @@ const checkMLServices = async () => {
             };
         }
     }
+    
     return {
         timestamp: new Date().toISOString(),
         services
@@ -417,12 +497,14 @@ const checkMLServices = async () => {
 };
 
 // ----------------- Data Validation -----------------
+
 const validateData = (data, modelType) => {
     const errors = [];
     if (!data) {
         errors.push('Data is required');
         return { valid: false, errors };
     }
+    
     const dataToValidate = Array.isArray(data) ? data[0] : data;
 
     switch (modelType) {
@@ -434,17 +516,19 @@ const validateData = (data, modelType) => {
             }
             break;
         case 'koi':
-            const koiFeatures = ['koi_impact', 'koi_duration', 'koi_depth', 'koi_teq'];
+            // KOI features validation
+            const koiFeatures = ['koi_period', 'koi_impact', 'koi_duration', 'koi_depth'];
             const missingKOIFeatures = koiFeatures.filter(feature => !dataToValidate.hasOwnProperty(feature));
             if (missingKOIFeatures.length > 0) {
                 errors.push(`Missing KOI features: ${missingKOIFeatures.join(', ')}`);
             }
             break;
         case 'k2':
-            const k2Features = ['pl_rade', 'pl_bmasse', 'pl_insol'];
+            // K2 features validation - only require basic features
+            const k2Features = ['pl_orbper', 'pl_rade'];  // Only require basic features
             const missingK2Features = k2Features.filter(feature => !dataToValidate.hasOwnProperty(feature));
             if (missingK2Features.length > 0) {
-                errors.push(`Missing K2 features: ${missingK2Features.join(', ')}`);
+                errors.push(`Missing basic K2 features: ${missingK2Features.join(', ')}`);
             }
             break;
         case 'custom':
@@ -461,6 +545,7 @@ const validateData = (data, modelType) => {
 };
 
 // ----------------- Bulk Data Processing -----------------
+
 const processBulkData = async (data, modelType, userId, customModelId = null) => {
     const results = [];
     const errors = [];
@@ -498,6 +583,7 @@ const processBulkData = async (data, modelType, userId, customModelId = null) =>
 };
 
 // ----------------- Model Information -----------------
+
 const getModelInfo = async (modelType) => {
     try {
         let serviceUrl;
@@ -515,30 +601,74 @@ const getModelInfo = async (modelType) => {
                 throw new Error(`Unknown model type: ${modelType}`);
         }
         
-        const response = await axios.get(`${serviceUrl}/model_info`, { timeout: 10000 });
+        // Try different endpoints
+        let response;
+        try {
+            response = await axios.get(`${serviceUrl}/model_info`, { 
+                timeout: 10000 
+            });
+        } catch (firstError) {
+            try {
+                response = await axios.get(`${serviceUrl}/model-info`, { 
+                    timeout: 10000 
+                });
+            } catch (secondError) {
+                // Try health endpoint as fallback
+                response = await axios.get(`${serviceUrl}/health`, { 
+                    timeout: 10000 
+                });
+                return {
+                    is_trained: response.data.model_loaded || false,
+                    model_type: modelType.toUpperCase(),
+                    class_names: ['CANDIDATE', 'CONFIRMED', 'FALSE POSITIVE'],
+                    selected_features: [
+                        'koi_period', 'koi_impact', 'koi_duration', 'koi_depth', 
+                        'koi_prad', 'koi_teq', 'koi_insol', 'koi_model_snr',
+                        'koi_steff', 'koi_slogg', 'koi_srad', 'koi_kepmag'
+                    ],
+                    target_column: 'koi_disposition',
+                    is_mock: true
+                };
+            }
+        }
+        
         return response.data;
+        
     } catch (error) {
         console.error(`Get Model Info Error for ${modelType}:`, error.message);
+        
+        // Return fallback data
         return {
             is_trained: true,
             model_type: modelType.toUpperCase(),
-            class_names: ['FP', 'PC', 'KP', 'CP', 'APC', 'FA'],
-            selected_features: ['pl_orbper', 'pl_trandurh', 'pl_trandep', 'pl_rade', 'pl_insol', 'pl_eqt'],
-            target_column: 'tfopwg_disp',
+            class_names: ['CANDIDATE', 'CONFIRMED', 'FALSE POSITIVE'],
+            selected_features: [
+                'koi_period', 'koi_impact', 'koi_duration', 'koi_depth', 
+                'koi_prad', 'koi_teq', 'koi_insol', 'koi_model_snr',
+                'koi_steff', 'koi_slogg', 'koi_srad', 'koi_kepmag'
+            ],
+            target_column: 'koi_disposition',
             is_mock: true
         };
     }
 };
 
 // ----------------- Custom Model Functions -----------------
-const trainCustomModel = async (user_id, fileData, trainingParams = {}) => {
+
+const trainCustomModel = async (user_id, file, trainingParams = {}) => {
     try {
-        const response = await axios.post(`${ML_SERVICES.CUSTOM}/train`, {
-            user_id,
-            file: fileData,
-            training_params: trainingParams
-        }, {
-            timeout: 60000
+        const formData = new FormData();
+        formData.append('user_id', user_id);
+        formData.append('file', file.buffer, { filename: file.originalname });
+        formData.append('target_column', trainingParams.targetColumn);
+        formData.append('model_type', trainingParams.modelType);
+        formData.append('training_params', JSON.stringify(trainingParams));
+
+        const response = await axios.post(`${ML_SERVICES.CUSTOM}/train`, formData, {
+            timeout: 60000,
+            headers: {
+                'X-User-ID': user_id
+            }
         });
         return response.data;
     } catch (error) {
@@ -594,21 +724,36 @@ const deleteCustomModel = async (user_id) => {
     }
 };
 
+// ----------------- Module Exports -----------------
+
 module.exports = {
+    // Prediction functions
     predictWithTOI,
     predictWithKOI,
     predictWithK2,
     predictWithCustomModel,
+    
+    // Training functions
     trainCustomModel,
+    
+    // Storage functions
     storePrediction,
+    
+    // Export functions
     generateCSVExport,
     generateExcelExport,
     getEntriesForExport,
+    
+    // Model information
     getModelInfo,
     getCustomModelInfo,
     deleteCustomModel,
+    
+    // Utility functions
     validateData,
     processBulkData,
     checkMLServices,
+    
+    // Constants
     ML_SERVICES
 };

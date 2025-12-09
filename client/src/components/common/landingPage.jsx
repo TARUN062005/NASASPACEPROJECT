@@ -6,7 +6,7 @@ const LandingPage = () => {
   // NASA-inspired styles
   const containerStyle = {
     minHeight: "100vh",
-    background: "linear-gradient(135deg, #0a0a2a 0%, #1a237e 50%, #311b92 100%)",
+    background: "linear-gradient(135deg, rgba(10, 10, 42, 0.8) 0%, rgba(26, 35, 126, 0.7) 50%, rgba(49, 27, 146, 0.6) 100%)",
     position: "relative",
     overflow: "hidden",
     display: "flex",
@@ -14,22 +14,27 @@ const LandingPage = () => {
     justifyContent: "center",
   };
 
-  // Animated stars background
-  const starsStyle = {
+  // Video background style
+  const videoStyle = {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    transform: "translate(-50%, -50%)",
+    zIndex: 0,
+  };
+
+  // Overlay to make content readable
+  const overlayStyle = {
     position: "absolute",
     top: 0,
     left: 0,
     width: "100%",
     height: "100%",
-    background: `
-      radial-gradient(2px 2px at 20px 30px, #eee, transparent),
-      radial-gradient(2px 2px at 40px 70px, #fff, transparent),
-      radial-gradient(1px 1px at 90px 40px, #fff, transparent),
-      radial-gradient(1px 1px at 130px 80px, #fff, transparent),
-      radial-gradient(2px 2px at 160px 30px, #eee, transparent)
-    `,
-    backgroundSize: "200px 200px",
-    animation: "twinkle 8s infinite linear",
+    background: "rgba(10, 10, 42, 0.4)",
+    zIndex: 1,
   };
 
   // Floating planets animation
@@ -37,6 +42,7 @@ const LandingPage = () => {
     position: "absolute",
     width: "100%",
     height: "100%",
+    zIndex: 1,
   };
 
   const planet1Style = {
@@ -157,15 +163,31 @@ const LandingPage = () => {
 
   return (
     <div style={containerStyle}>
-      {/* Animated Background Elements */}
-      <div style={starsStyle}></div>
+      {/* Video Background */}
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        style={videoStyle}
+      >
+        <source src="https://www.pexels.com/video/outer-space-856309/" type="video/mp4" />
+        {/* Fallback in case video doesn't load */}
+        Your browser does not support the video tag.
+      </video>
+      
+      {/* Overlay for better readability */}
+      <div style={overlayStyle}></div>
+      
+      {/* Floating Planets */}
       <div style={planetsStyle}>
         <div style={planet1Style}></div>
         <div style={planet2Style}></div>
       </div>
 
+      {/* Main Content */}
       <div style={contentStyle}>
-        <h1 style={titleStyle}>ExoDiscover</h1>
+        <h1 style={titleStyle}>ExoDiscover AI</h1>
         <p style={subtitleStyle}>
           Harness the power of artificial intelligence to explore the cosmos and 
           discover new exoplanets hidden within NASA's Kepler, K2, and TESS mission data.
@@ -216,14 +238,16 @@ const LandingPage = () => {
       {/* Add CSS animations */}
       <style>
         {`
-          @keyframes twinkle {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
-          }
           @keyframes float {
             0%, 100% { transform: translateY(0px) rotate(0deg); }
             33% { transform: translateY(-20px) rotate(120deg); }
             66% { transform: translateY(10px) rotate(240deg); }
+          }
+          
+          /* Ensure video covers entire background */
+          video {
+            min-width: 100%;
+            min-height: 100%;
           }
         `}
       </style>

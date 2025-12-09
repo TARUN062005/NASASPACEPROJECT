@@ -96,7 +96,7 @@ const Header = () => {
           WebkitTextFillColor: "transparent",
           backgroundClip: "text",
         }}>
-          ExoDiscover
+          ExoDiscover AI
         </span>
       </Link>
 

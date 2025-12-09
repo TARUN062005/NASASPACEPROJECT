@@ -180,8 +180,7 @@ const UserDashboard = () => {
           <Route path="/dashboard/toi" element={<TOIDashboard />} />
           <Route path="/dashboard/koi" element={<KOIDashboard />} />
           <Route path="/dashboard/k2" element={<K2Dashboard />} />
-          <Route path="/dashboard/custom/*" element={<CustomModelDashboard />} />
-          
+         {/* <Route path="/dashboard/custom-models" element={<CustomModelDashboard />} />*/}       
           {/* Catch all for user routes */}
           <Route path="*" element={<Navigate to="/user/dashboard" replace />} />
         </Routes>
