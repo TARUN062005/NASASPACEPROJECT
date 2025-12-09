@@ -8,7 +8,7 @@ import './index.css'
 
 export const AuthContext = createContext();
 export const API = axios.create({
-  baseURL: import.meta.env.VITE_BACKEND_URL || "http://localhost:5000",
+  baseURL: import.meta.env.VITE_BACKEND_URL || "https://nasaspacebackend.onrender.com",
 });
 
 // Enhanced security: Only log in development with sensitive data filtered
