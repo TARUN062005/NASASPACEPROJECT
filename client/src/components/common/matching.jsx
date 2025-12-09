@@ -55,7 +55,7 @@ function Matching() {
         formData.append('file2', file2);
 
         try {
-            const response = await axios.post('http://localhost:5000/api/compare', formData, {
+            const response = await axios.post('https://nasaspacebackend.onrender.com/api/compare', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
             setResult(response.data.summary);
