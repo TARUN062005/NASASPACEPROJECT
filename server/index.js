@@ -12,19 +12,32 @@ const compareRoutes = require('./routes/compareRouter'); // Import the new route
 // Load environment variables
 dotenv.config();
 
+// ML Service URLs configuration
+const ML_SERVICES = {
+    TOI: process.env.TOI_URL || 'http://localhost:5001',
+    KOI: process.env.KOI_URL || 'http://localhost:5002',
+    K2: process.env.K2_URL || 'http://localhost:5003',
+    CUSTOM: process.env.CUSTOM_URL || 'http://localhost:5004'
+};
+
+// For combined deployment (optional)
+const ML_BASE_URL = process.env.ML_BASE_URL || 'http://localhost:10000';
+
 const app = express();
 
 // ----------------- Enhanced Middleware -----------------
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(
-    cors({
-        origin: process.env.CLIENT_URL || "http://localhost:5173",
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-User-ID']
-    })
-);
+// CORS configuration for production and development
+const corsOptions = {
+    origin: process.env.NODE_ENV === 'production' 
+        ? (process.env.CLIENT_URL || ['https://your-frontend-url.vercel.app']).split(',')
+        : ['http://localhost:5173'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-User-ID']
+};
+app.use(cors(corsOptions));
 
 // ----------------- Enhanced Routes -----------------
 app.get("/", (req, res) => {

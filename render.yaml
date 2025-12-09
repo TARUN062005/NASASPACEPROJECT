@@ -1,0 +1,41 @@
+services:
+  # Backend Server
+  - type: web
+    name: nasa-ml-backend
+    env: node
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+    healthCheckPath: /health
+
+  # Combined ML Service (All 4 models in one)
+  - type: web
+    name: nasa-ml-models
+    env: python
+    buildCommand: |
+      pip install -r ML_Model/requirements-combined.txt
+    startCommand: |
+      python ML_Model/combined_app.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+    disk:
+      name: ml-models
+      mountPath: /opt/render/ml-models
+      sizeGB: 1
+
+  # Frontend (Static Site)
+  - type: web
+    name: nasa-ml-frontend
+    env: static
+    buildCommand: |
+      cd client && npm install && npm run build
+    staticPublishPath: ./client/dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600
