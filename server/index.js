@@ -7,99 +7,116 @@ const { ConnectDb } = require("./utils/dbConnector");
 // Routers
 const userLoginRouter = require("./routes/userLogin");
 const mlRoutes = require("./routes/mlRoutes");
-const compareRoutes = require('./routes/compareRouter'); // Import the new router
+const compareRoutes = require('./routes/compareRouter');
+const otherLogin = require("./routes/otherLogin");
 
 // Load environment variables
 dotenv.config();
 
-// ML Service URLs configuration
+// ML Service URLs - FOR PRODUCTION
 const ML_SERVICES = {
-    TOI: process.env.TOI_URL || 'http://localhost:5001',
-    KOI: process.env.KOI_URL || 'http://localhost:5002',
-    K2: process.env.K2_URL || 'http://localhost:5003',
-    CUSTOM: process.env.CUSTOM_URL || 'http://localhost:5004'
+    TOI: process.env.TOI_URL || 'https://nasa-ml-models.onrender.com/toi',
+    KOI: process.env.KOI_URL || 'https://nasa-ml-models.onrender.com/koi',
+    K2: process.env.K2_URL || 'https://nasa-ml-models.onrender.com/k2',
+    CUSTOM: process.env.CUSTOM_URL || 'https://nasa-ml-models.onrender.com/custom'
 };
 
-// For combined deployment (optional)
-const ML_BASE_URL = process.env.ML_BASE_URL || 'http://localhost:10000';
-
 const app = express();
+
+// Keep alive for production
+if (process.env.NODE_ENV === 'production') {
+  try {
+    require('./keepAlive');
+    console.log('✅ Keep-alive service started');
+  } catch (error) {
+    console.log('⚠️ Keep-alive service not found, skipping...');
+  }
+}
 
 // ----------------- Enhanced Middleware -----------------
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-// CORS configuration for production and development
-const corsOptions = {
-    origin: process.env.NODE_ENV === 'production' 
-        ? (process.env.CLIENT_URL || ['https://your-frontend-url.vercel.app']).split(',')
-        : ['http://localhost:5173'],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-User-ID']
-};
-app.use(cors(corsOptions));
 
-// ----------------- Enhanced Routes -----------------
+// CORS configuration - SIMPLIFIED VERSION
+const allowedOrigins = [
+  'https://nasaspaceproject.onrender.com',
+  'http://localhost:5173',
+  'https://nasaspacebackend.onrender.com'
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      console.log(`CORS blocked: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-User-ID']
+}));
+
+// ----------------- Basic Routes -----------------
 app.get("/", (req, res) => {
     res.json({
         message: "NASA Exoplanet Detection API is running...",
         version: "2.0.0",
-        models: {
-            pre_trained: ["TOI", "KOI", "K2"],
-            custom: "User-trained models"
-        },
-        features: {
-            image_generation: true,
-            bulk_predictions: true,
-            data_export: true,
-            real_time_charts: true
+        deployed: true,
+        frontend: "https://nasaspaceproject.onrender.com",
+        backend: "https://nasaspacebackend.onrender.com",
+        endpoints: {
+            health: "/health",
+            ml: "/api/ml",
+            user: "/user",
+            other: "/other",
+            compare: "/api/compare"
         }
     });
 });
 
-// Enhanced health check for all ML services
-app.get("/health/all", async (req, res) => {
-    try {
-        const { checkMLServices } = require('./utils/mlUtils');
-        const healthStatus = await checkMLServices();
-
-        healthStatus.system = {
-            node_version: process.version,
-            platform: process.platform,
-            memory_usage: process.memoryUsage(),
-            uptime: process.uptime(),
-            environment: process.env.NODE_ENV || 'development'
-        };
-
-        res.json(healthStatus);
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Health check failed",
-            error: error.message
-        });
-    }
+// Health endpoint for pinging
+app.get("/health", (req, res) => {
+    res.json({
+        status: "healthy",
+        timestamp: new Date().toISOString(),
+        service: "NASA Backend API",
+        environment: process.env.NODE_ENV || 'development',
+        uptime: process.uptime(),
+        ml_services: Object.keys(ML_SERVICES)
+    });
 });
 
+// ----------------- API Routes -----------------
 app.use("/user", userLoginRouter);
+app.use("/other", otherLogin);
 app.use("/api/ml", mlRoutes);
-app.use("/api", compareRoutes); // Add the new comparison route here
+app.use("/api", compareRoutes);
 
-// ----------------- Enhanced Error Handling Middleware -----------------
+// ----------------- Error Handling -----------------
 app.use((err, req, res, next) => {
     console.error("🚨 Server Error:", {
         message: err.message,
-        stack: err.stack,
         url: req.url,
-        method: req.method,
-        ip: req.ip
+        method: req.method
     });
+
+    // Handle CORS errors
+    if (err.message === 'Not allowed by CORS') {
+        return res.status(403).json({
+            success: false,
+            message: "CORS error: Origin not allowed"
+        });
+    }
 
     res.status(500).json({
         success: false,
         message: "Internal server error",
-        error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
-        request_id: req.id || Date.now().toString(36)
+        error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
     });
 });
 
@@ -112,41 +129,33 @@ app.use((req, res) => {
         available_routes: {
             ml: "/api/ml/*",
             user: "/user/*",
+            other: "/other/*",
             compare: "/api/compare",
-            health: "/health/all"
+            health: "/health"
         }
     });
-});
-
-// ----------------- Graceful Shutdown -----------------
-process.on('SIGTERM', async () => {
-    console.log('🔄 SIGTERM received, starting graceful shutdown...');
-    process.exit(0);
-});
-
-process.on('SIGINT', async () => {
-    console.log('🔄 SIGINT received, starting graceful shutdown...');
-    process.exit(0);
 });
 
 // ----------------- Start Server -----------------
 const startServer = async () => {
     try {
         await ConnectDb();
-        const port = process.env.PORT || 5000;
+        const port = process.env.PORT || 10000;
 
         app.listen(port, () => {
             console.log(`
 ✅ Server running on port ${port}
-🔬 ML Services Status:
-    - TOI Model: ${process.env.TOI_SERVICE_URL || 'http://localhost:5001'}
-    - KOI Model: ${process.env.KOI_SERVICE_URL || 'http://localhost:5002'}
-    - K2 Model: ${process.env.K2_SERVICE_URL || 'http://localhost:5003'}
-    - Custom Model: ${process.env.CUSTOM_SERVICE_URL || 'http://localhost:5004'}
+🌍 Environment: ${process.env.NODE_ENV || 'development'}
+🔗 Frontend: https://nasaspaceproject.onrender.com
+🔗 Backend URL: https://nasaspacebackend.onrender.com
+🔬 ML Services:
+    - TOI: ${ML_SERVICES.TOI}
+    - KOI: ${ML_SERVICES.KOI}
+    - K2: ${ML_SERVICES.K2}
+    - Custom: ${ML_SERVICES.CUSTOM}
 📊 Database: Connected
-🌐 API Base: http://localhost:${port}
-🚀 Features: Image Generation, Bulk Predictions, Data Export, Real-time Charts
-      `);
+🚀 Ready to receive requests!
+            `);
         });
     } catch (err) {
         console.error("❌ Failed to start server:", err.message);
