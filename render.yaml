@@ -17,7 +17,7 @@ services:
     name: nasa-ml-models
     env: python
     buildCommand: |
-      pip install -r ML_Model/requirements-combined.txt
+      pip install -r ML_Model/requirements.txt
     startCommand: |
       python ML_Model/combined_app.py
     envVars:
