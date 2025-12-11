@@ -99,10 +99,11 @@ app.get("/api/info", (req, res) => {
     });
 });
 
-// All other GET requests return React app
-app.get('/*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// Serve index.html for any unmatched GET request (works with latest path-to-regexp)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
 
 // ----------------- Error Handling -----------------
 app.use((err, req, res, next) => {

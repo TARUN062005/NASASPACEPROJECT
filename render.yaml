@@ -6,14 +6,14 @@ services:
     buildCommand: |
       # Install ALL client dependencies (including dev dependencies needed for build)
       cd client && npm install
-      # Build React app
+      # Build React app (Vite)
       npm run build
-      # Install server dependencies
+      # Install server dependencies (production)
       cd ../server && npm ci
     startCommand: |
-      # Create public directory and copy built files
+      # Create public directory and copy built files (tolerant copy)
       mkdir -p server/public
-      cp -r client/dist/* server/public/
+      cp -r client/dist/* server/public/ || true
       # Start server
       cd server && npm start
     envVars:
