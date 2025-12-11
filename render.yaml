@@ -1,23 +1,15 @@
 services:
-  # Combined Frontend + Backend Service
   - type: web
     name: nasaspaceproject
     env: node
-    nodeVersion: 18.17.0  # <-- MOVE THIS LINE HERE
+    nodeVersion: 18.17.0
     buildCommand: |
-      echo "Installing client dependencies..."
       cd client && npm ci
-      echo "Building React app..."
       npm run build
-      echo "Installing server dependencies..."
       cd ../server && npm ci
     startCommand: |
-      # Create public directory and copy built files
-      echo "Setting up static files..."
       mkdir -p server/public
       cp -r client/dist/* server/public/
-      # Start the server
-      echo "Starting server..."
       cd server && npm start
     envVars:
       - key: NODE_ENV
