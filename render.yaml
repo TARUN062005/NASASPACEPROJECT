@@ -31,7 +31,7 @@ services:
       - key: TOI_URL
         value: https://nasa-ml-models.onrender.com/toi
       - key: KOI_URL
-        value: https://nasa-ml-models.onrender.com/koi
+        value: https://nasa-ml-models.onrender.com/koi:
   # Combined Frontend + Backend Service
   - type: web
     name: nasaspaceproject
