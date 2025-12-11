@@ -2,6 +2,7 @@ services:
   - type: web
     name: nasaspaceproject
     runtime: node
+    plan: free
     buildCommand: |
       cd client && npm ci
       npm run build
