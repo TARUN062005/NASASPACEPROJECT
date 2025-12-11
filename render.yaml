@@ -8,7 +8,6 @@ services:
       cd client && npm ci
       echo "Building React app..."
       npm run build
-      
       echo "Installing server dependencies..."
       cd ../server && npm ci
     startCommand: |
@@ -16,7 +15,6 @@ services:
       echo "Setting up static files..."
       mkdir -p server/public
       cp -r client/dist/* server/public/
-      
       # Start the server
       echo "Starting server..."
       cd server && npm start
