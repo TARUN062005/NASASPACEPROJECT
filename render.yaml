@@ -1,8 +1,7 @@
 services:
   - type: web
     name: nasaspaceproject
-    env: node
-    nodeVersion: 18.17.0
+    runtime: node
     buildCommand: |
       cd client && npm ci
       npm run build
