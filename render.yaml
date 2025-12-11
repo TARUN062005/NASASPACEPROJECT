@@ -31,7 +31,7 @@ services:
       - key: CUSTOM_URL
         value: https://nasa-ml-models.onrender.com/custom
       - key: EMAIL_USER
-        value: "princetaruncemuri@gmail.com"
+        value: "princetarunvemuri@gmail.com"
       - key: EMAIL_PASS
         sync: false
     healthCheckPath: /health
