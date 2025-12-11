@@ -3,6 +3,7 @@ services:
   - type: web
     name: nasaspaceproject
     env: node
+    nodeVersion: 18.17.0  # <-- MOVE THIS LINE HERE
     buildCommand: |
       echo "Installing client dependencies..."
       cd client && npm ci
@@ -43,4 +44,3 @@ services:
         sync: false
     healthCheckPath: /health
     autoDeploy: true
-    nodeVersion: 18.17.0
