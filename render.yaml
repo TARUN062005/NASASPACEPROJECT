@@ -1,15 +1,27 @@
 services:
+services:
   - type: web
     name: nasaspaceproject
     runtime: node
     plan: free
     buildCommand: |
-      cd client && npm ci
+      # Install client dependencies including dev dependencies
+      cd client && npm ci --include=dev
+      # Build React app
       npm run build
+      # Install server dependencies
       cd ../server && npm ci
     startCommand: |
+      # Create public directory
       mkdir -p server/public
-      cp -r client/dist/* server/public/ || true
+      # Copy built files if they exist
+      if [ -d "client/dist" ]; then
+        cp -r client/dist/* server/public/
+      else
+        echo "Warning: client/dist not found, creating placeholder"
+        echo "<html><body>Build in progress...</body></html>" > server/public/index.html
+      fi
+      # Start server
       cd server && PORT=${PORT:-10000} npm start
     envVars:
       - key: NODE_ENV
