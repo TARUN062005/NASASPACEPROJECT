@@ -15,8 +15,8 @@ services:
       # Create public directory
       mkdir -p server/public
       # Copy built files if they exist
-      if [ -d "client/dist" ]; then
-        cp -r client/dist/* server/public/
+      if [ -d "client/" ]; then
+        cp -r client/* server/
       else
         echo "Warning: client/dist not found, creating placeholder"
         echo "<html><body>Build in progress...</body></html>" > server/public/index.html
