@@ -9,8 +9,8 @@ services:
       cd ../server && npm ci
     startCommand: |
       mkdir -p server/public
-      cp -r client/dist/* server/public/
-      cd server && npm start
+      cp -r client/dist/* server/public/ || true
+      cd server && PORT=${PORT:-10000} npm start
     envVars:
       - key: NODE_ENV
         value: production
