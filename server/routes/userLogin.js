@@ -38,6 +38,36 @@ router.post("/google-login", googleLogin);
 router.post("/facebook-login", facebookLogin);
 router.post("/twitter-login", twitterLogin);
 
+// ADD THIS /me ENDPOINT
+router.get("/me", authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    console.log('🔍 /user/me endpoint called for user:', user.email);
+    
+    // Return user data (exclude sensitive fields)
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name || user.email.split('@')[0], // Use name or first part of email
+        role: user.role || 'USER',
+        profileCompleted: user.profileCompleted || false,
+        // Add any other safe fields you want to expose
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in /user/me endpoint:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching user profile'
+    });
+  }
+});
+
 // Protected dashboard routes
 router.get("/profile", authenticateToken, getProfile);
 router.put("/profile", authenticateToken, updateProfile);

@@ -8,7 +8,7 @@ import LandingPage from "./components/common/landingPage";
 import AuthPage from "./components/common/authPage.jsx";
 import ProtectedRoutes from "./components/common/ProtectedRoutes.jsx";
 import NotFoundPage from "./components/common/NotFoundPage.jsx";
-import AIChatbot from "./components/common/AIChatbot.jsx"; // Import AIChatbot
+import AIChatbot from "./components/common/AIChatbot.jsx";
 
 // Dashboards
 import UserDashboard from "./components/user/userDashboard.jsx";
@@ -131,45 +131,6 @@ const App = () => {
                     
                     ::-webkit-scrollbar-thumb:hover {
                         background: #2979ff;
-                    }
-
-                    /* Custom utility classes for styling */
-                    .bg-gradient-cosmic {
-                        background: linear-gradient(135deg, #0a0a2a 0%, #1a237e 50%, #311b92 100%);
-                    }
-                    
-                    .text-gradient-blue {
-                        background: linear-gradient(45deg, #ffffff, #448aff);
-                        -webkit-background-clip: text;
-                        -webkit-text-fill-color: transparent;
-                        background-clip: text;
-                    }
-
-                    /* Loading animations */
-                    @keyframes pulse {
-                        0%, 100% { opacity: 1; }
-                        50% { opacity: 0.5; }
-                    }
-                    
-                    .animate-pulse {
-                        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-                    }
-
-                    /* Button hover effects */
-                    .btn-hover-glow:hover {
-                        box-shadow: 0 0 20px rgba(66, 153, 225, 0.5);
-                        transform: translateY(-2px);
-                        transition: all 0.3s ease;
-                    }
-
-                    /* Card hover effects */
-                    .card-hover {
-                        transition: all 0.3s ease;
-                    }
-                    
-                    .card-hover:hover {
-                        transform: translateY(-5px);
-                        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
                     }
                 `}
             </style>

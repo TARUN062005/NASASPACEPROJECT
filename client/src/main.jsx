@@ -1,4 +1,3 @@
-// client/src/main.jsx
 import React, { createContext, useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -7,137 +6,88 @@ import axios from "axios";
 import './index.css'
 
 export const AuthContext = createContext();
+
+// Log API URL for debugging
+console.log('🌐 VITE_BACKEND_URL:', import.meta.env.VITE_BACKEND_URL);
+
 export const API = axios.create({
   baseURL: import.meta.env.VITE_BACKEND_URL || "https://nasaspacebackend.onrender.com",
+  timeout: 10000,
+  withCredentials: true
 });
 
-// Enhanced security: Only log in development with sensitive data filtered
-const secureLog = (...args) => {
-  if (import.meta.env.DEV) {
-    // Filter out sensitive data
-    const filteredArgs = args.map(arg => {
-      if (typeof arg === 'string') {
-        // Hide passwords, tokens, and sensitive form data
-        if (arg.includes('password') || arg.includes('Password') || 
-            arg.includes('token') || arg.includes('Token') ||
-            arg.includes('otp') || arg.includes('OTP') ||
-            arg.includes('currentPassword') || arg.includes('newPassword') ||
-            arg.includes('confirmPassword')) {
-          return '[SENSITIVE_DATA]';
-        }
-        // Hide email/phone from logs
-        if (arg.includes('@') || (arg.match(/\d/g) && arg.length >= 10)) {
-          return arg.replace(/(?<=.{3}).(?=.*@)/g, '*').replace(/(?<=.{2})\d(?=\d{2})/g, '*');
-        }
-      }
-      // For objects, recursively filter sensitive data
-      if (typeof arg === 'object' && arg !== null) {
-        const filteredObj = {};
-        for (const [key, value] of Object.entries(arg)) {
-          if (key.toLowerCase().includes('password') || 
-              key.toLowerCase().includes('token') ||
-              key.toLowerCase().includes('otp')) {
-            filteredObj[key] = '[SENSITIVE_DATA]';
-          } else if (typeof value === 'string' && (value.includes('@') || (value.match(/\d/g) && value.length >= 10))) {
-            filteredObj[key] = value.replace(/(?<=.{3}).(?=.*@)/g, '*').replace(/(?<=.{2})\d(?=\d{2})/g, '*');
-          } else {
-            filteredObj[key] = value;
-          }
-        }
-        return filteredObj;
-      }
-      return arg;
-    });
-    console.log(...filteredArgs);
+// Debug: Log all requests and responses
+API.interceptors.request.use(
+  (config) => {
+    console.log(`🌐 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+    return config;
+  },
+  (error) => {
+    console.error('🌐 Request Error:', error);
+    return Promise.reject(error);
   }
-};
+);
 
-const secureError = (...args) => {
-  if (import.meta.env.DEV) {
-    const filteredArgs = args.map(arg => {
-      if (typeof arg === 'string' && (arg.includes('token') || arg.includes('password') || arg.includes('Token'))) {
-        return '[SENSITIVE_DATA]';
-      }
-      return arg;
+API.interceptors.response.use(
+  (response) => {
+    console.log(`✅ ${response.status} ${response.config.url}`);
+    return response;
+  },
+  (error) => {
+    console.error('❌ Response Error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      message: error.message
     });
-    console.error(...filteredArgs);
+    return Promise.reject(error);
   }
-};
+);
 
 const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => {
-    const storedToken = localStorage.getItem("token");
-    const storedTime = localStorage.getItem("token_time");
-    
-    // Auto-logout if token is older than 24 hours
-    if (storedToken && storedTime) {
-      const tokenAge = Date.now() - parseInt(storedTime);
-      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-      
-      if (tokenAge > maxAge) {
-        secureLog("🔐 Token expired, auto-logout");
-        localStorage.removeItem("token");
-        localStorage.removeItem("token_time");
-        localStorage.removeItem("user");
-        return null;
-      }
-    }
-    
-    return storedToken;
+    return localStorage.getItem("token");
   });
   
   const [loading, setLoading] = useState(true);
   const [needsProfileCompletion, setNeedsProfileCompletion] = useState(false);
 
-  // Enhanced login with timestamp
-  // In the main.jsx login function, update this part:
-
-const login = (userData, authToken) => {
-  secureLog('🔐 Login called with user data:', userData);
-  
-  const loginTime = Date.now();
-  
-  localStorage.setItem("token", authToken);
-  localStorage.setItem("token_time", loginTime.toString());
-  localStorage.setItem('user', JSON.stringify(userData));
-  
-  setToken(authToken);
-  setUser(userData);
-  
-  // FIXED: Simplified profile completion check - only check profileCompleted field
-  const requiresProfileCompletion = userData.profileCompleted === false;
-  secureLog('🔍 Profile completion check:', { 
-    profileCompleted: userData.profileCompleted,
-    requiresProfileCompletion 
-  });
-  
-  setNeedsProfileCompletion(requiresProfileCompletion);
-  
-  // FIXED: Force a page reload to ensure clean state
-  if (requiresProfileCompletion) {
-    setTimeout(() => {
+  const login = (userData, authToken) => {
+    console.log('🔐 Login called:', { 
+      email: userData.email,
+      profileCompleted: userData.profileCompleted 
+    });
+    
+    localStorage.setItem("token", authToken);
+    localStorage.setItem("user", JSON.stringify(userData));
+    
+    setToken(authToken);
+    setUser(userData);
+    
+    // Check profile completion
+    const requiresProfileCompletion = userData.profileCompleted === false;
+    setNeedsProfileCompletion(requiresProfileCompletion);
+    
+    // Force redirect
+    if (requiresProfileCompletion) {
       window.location.href = "/user/profile";
-    }, 100);
-  } else {
-    setTimeout(() => {
+    } else {
       window.location.href = "/user/dashboard";
-    }, 100);
-  }
-};
-  // Enhanced logout
+    }
+  };
+
   const logout = () => {
-    secureLog("🔒 Logging out");
+    console.log("🔒 Logging out");
     localStorage.removeItem("token");
-    localStorage.removeItem("token_time");
     localStorage.removeItem("user");
     setToken(null);
     setUser(null);
     setNeedsProfileCompletion(false);
+    window.location.href = "/";
   };
 
   const completeProfile = () => {
-    secureLog('✅ Profile completion called');
+    console.log('✅ Profile completion called');
     setNeedsProfileCompletion(false);
     if (user) {
       const updatedUser = { 
@@ -146,7 +96,6 @@ const login = (userData, authToken) => {
       };
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
-      secureLog('✅ Profile marked as completed:', updatedUser);
     }
   };
 
@@ -156,10 +105,9 @@ const login = (userData, authToken) => {
 
     const resetInactivityTimer = () => {
       clearTimeout(inactivityTimer);
-      // Auto-logout after 30 minutes of inactivity
       inactivityTimer = setTimeout(() => {
         if (token) {
-          secureLog("🕒 Auto-logout due to inactivity");
+          console.log("🕒 Auto-logout due to inactivity");
           logout();
         }
       }, 30 * 60 * 1000); // 30 minutes
@@ -180,24 +128,12 @@ const login = (userData, authToken) => {
     };
   }, [token]);
 
-  // Enhanced request interceptor
+  // Add authorization header to all requests
   useEffect(() => {
     const requestInterceptor = API.interceptors.request.use(
       (config) => {
         const currentToken = localStorage.getItem("token");
-        const tokenTime = localStorage.getItem("token_time");
-        
-        // Check token expiration
-        if (currentToken && tokenTime) {
-          const tokenAge = Date.now() - parseInt(tokenTime);
-          const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-          
-          if (tokenAge > maxAge) {
-            secureLog("🔐 Token expired in interceptor");
-            logout();
-            return Promise.reject(new Error("Token expired"));
-          }
-          
+        if (currentToken) {
           config.headers.Authorization = `Bearer ${currentToken}`;
         }
         return config;
@@ -211,7 +147,7 @@ const login = (userData, authToken) => {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
-          secureLog("🔐 Caught 401 Unauthorized, logging out");
+          console.log("🔐 401 Unauthorized - logging out");
           logout();
         }
         return Promise.reject(error);
@@ -224,51 +160,16 @@ const login = (userData, authToken) => {
     };
   }, []);
 
-  // Real-time user state synchronization
-  useEffect(() => {
-    const handleStorageChange = () => {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        try {
-          const userData = JSON.parse(storedUser);
-          setUser(userData);
-          
-          // Update profile completion status when storage changes
-          const requiresProfileCompletion = userData.profileCompleted === false;
-          setNeedsProfileCompletion(requiresProfileCompletion);
-        } catch (error) {
-          secureError('❌ Error parsing user data from storage:', error);
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Enhanced user profile fetch with security - FIXED PROFILE COMPLETION LOGIC
+  // Fetch user profile on load
   useEffect(() => {
     const fetchUserProfile = async () => {
+      console.log('🔍 Auth check started');
+      
       const storedToken = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
-      const storedTime = localStorage.getItem('token_time');
-
-      secureLog('🔍 Auth check started');
-      
-      // Check token expiration
-      if (storedToken && storedTime) {
-        const tokenAge = Date.now() - parseInt(storedTime);
-        const maxAge = 24 * 60 * 60 * 1000;
-        
-        if (tokenAge > maxAge) {
-          secureLog("🔐 Token expired on page load");
-          logout();
-          setLoading(false);
-          return;
-        }
-      }
       
       if (!storedToken) {
+        console.log('🔍 No token found');
         setUser(null);
         setNeedsProfileCompletion(false);
         setLoading(false);
@@ -278,82 +179,77 @@ const login = (userData, authToken) => {
       try {
         setLoading(true);
         
+        // Try to use stored user data first
         if (storedUser) {
           try {
             const userData = JSON.parse(storedUser);
-            secureLog('✅ Using stored user data:', userData);
+            console.log('✅ Using stored user data');
             setUser(userData);
             
-            // FIXED: Check profile completion status from stored user data
             const requiresProfileCompletion = userData.profileCompleted === false;
-            secureLog('🔍 Stored user profile completion check:', {
-              profileCompleted: userData.profileCompleted,
-              requiresProfileCompletion
+            setNeedsProfileCompletion(requiresProfileCompletion);
+            
+            // Validate token with backend
+            console.log('🔄 Validating token with backend...');
+            const userRes = await API.get("/user/me").catch((error) => {
+              console.log('⚠️ Token validation failed:', error.message);
+              // If token is invalid, logout
+              if (error.response?.status === 401) {
+                logout();
+              }
+              return null;
             });
             
-            setNeedsProfileCompletion(requiresProfileCompletion);
+            if (userRes?.data) {
+              console.log('✅ Token is valid, updating user data');
+              const freshUserData = userRes.data.user || userRes.data;
+              setUser(freshUserData);
+              localStorage.setItem('user', JSON.stringify(freshUserData));
+              
+              const requiresCompletion = freshUserData.profileCompleted === false;
+              setNeedsProfileCompletion(requiresCompletion);
+            }
             
-            setLoading(false);
-            return;
           } catch (parseError) {
-            secureError('❌ Error parsing stored user data:', parseError);
+            console.error('❌ Error parsing stored user data:', parseError);
           }
-        }
-
-        secureLog('🔄 Attempting to fetch user profile from /user/me');
-        const userRes = await API.get("/user/me").catch((error) => {
-          secureLog('⚠️ /user/me endpoint not available:', error.message);
-          return null;
-        });
-
-        if (userRes?.data) {
-          secureLog('✅ Auth verified via /user/me');
-          const userData = userRes.data.user || userRes.data;
-          setUser(userData);
-          
-          // FIXED: Check profile completion status from API response
-          const requiresProfileCompletion = userData.profileCompleted === false;
-          secureLog('🔍 API user profile completion check:', {
-            profileCompleted: userData.profileCompleted,
-            requiresProfileCompletion
-          });
-          
-          setNeedsProfileCompletion(requiresProfileCompletion);
-          
-          localStorage.setItem('user', JSON.stringify(userData));
         } else {
-          secureLog('ℹ️ No user data from /user/me, but token is valid');
-          const minimalUser = { 
-            role: 'USER', 
-            email: 'user@example.com',
-            name: 'User',
-            profileCompleted: false // Default to false for new users
-          };
-          setUser(minimalUser);
-          setNeedsProfileCompletion(true);
-          localStorage.setItem('user', JSON.stringify(minimalUser));
-        }
-      } catch (error) {
-        secureError("❌ Failed to fetch user profile:", error.message);
-        if (storedUser) {
-          try {
-            const userData = JSON.parse(storedUser);
+          // No stored user, fetch from API
+          console.log('🔄 Fetching user profile from API...');
+          const userRes = await API.get("/user/me").catch((error) => {
+            console.log('❌ Failed to fetch user profile:', error.message);
+            return null;
+          });
+
+          if (userRes?.data) {
+            console.log('✅ User profile fetched successfully');
+            const userData = userRes.data.user || userRes.data;
             setUser(userData);
             
-            // Check profile completion status even on error
             const requiresProfileCompletion = userData.profileCompleted === false;
             setNeedsProfileCompletion(requiresProfileCompletion);
-          } catch (parseError) {
-            secureError('❌ Error parsing stored user data:', parseError);
+            
+            localStorage.setItem('user', JSON.stringify(userData));
           }
         }
+      } catch (error) {
+        console.error("❌ Error in fetchUserProfile:", error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchUserProfile();
-  }, [token]);
+  }, []);
+
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log('🔄 Auth State Changed:', {
+      user: user?.email,
+      loading,
+      needsProfileCompletion
+    });
+  }, [user, loading, needsProfileCompletion]);
 
   const authContextValue = { 
     user, 

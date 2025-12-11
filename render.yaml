@@ -1,26 +1,64 @@
 services:
-  # Backend Server
+  # Combined Frontend + Backend in one service
   - type: web
-    name: nasa-ml-backend
+    name: nasaspaceproject-combined
     env: node
-    buildCommand: cd server && npm install
-    startCommand: cd server && npm start
+    buildCommand: |
+      # Install and build React app
+      cd client && npm ci && npm run build
+      # Install backend dependencies
+      cd ../server && npm ci
+    startCommand: |
+      # Copy React build to server/public
+      mkdir -p server/public
+      cp -r client/dist/* server/public/
+      
+      # Start the server
+      cd server && npm start
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
       - key: DATABASE_URL
-        sync: false
-    healthCheckPath: /health
-
-  # Combined ML Service (All 4 models in one)
+        fromDatabase:
+          name: nasa-database
+          property: connectionString
+      - key: JWT_SECRET_TOKEN
+        generateValue: true
+      - key: CLIENT_URL
+        value: https://nasaspaceproject-combined.onrender.com
+      - key: TOI_URL
+        value: https://nasa-ml-models.onrender.com/toi
+      - key: KOI_URL
+        value: https://nasa-ml-models.onrender.com/koiservices:
+  # Combined Frontend + Backend Service
   - type: web
-    name: nasa-ml-models
-    env: python
+    name: nasaspaceproject
+    env: node
     buildCommand: |
+<<<<<<< HEAD
       pip install -r ML_Model/requirements.txt
+=======
+      echo "Installing client dependencies..."
+      cd client && npm ci
+      echo "Building React app..."
+      npm run build
+      
+      echo "Installing server dependencies..."
+      cd ../server && npm ci
+>>>>>>> 582140d (Updated)
     startCommand: |
-      python ML_Model/combined_app.py
+      # Create public directory and copy built files
+      echo "Setting up static files..."
+      mkdir -p server/public
+      cp -r client/dist/* server/public/
+      
+      # Start the server
+      echo "Starting server..."
+      cd server && npm start
     envVars:
+<<<<<<< HEAD
       - key: PYTHON_VERSION
         value: 3.9.0
     disk:
@@ -39,3 +77,37 @@ services:
       - path: /*
         name: Cache-Control
         value: public, max-age=3600
+=======
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        value: "mongodb+srv://tarun06:540847@myatlasclusteredu.mb5nul7.mongodb.net/SampleFreeUsecode?retryWrites=true&w=majority&appName=myAtlasClusterEDU"
+      - key: JWT_SECRET_TOKEN
+        value: "mytokenisverysfasfsfaffkakfkasSkkkfdasecretwhichyoudontknoafdjanfakfnkakfasw"
+      - key: CLIENT_URL
+        value: https://nasaspaceproject.onrender.com
+      - key: TOI_URL
+        value: https://nasa-ml-models.onrender.com/toi
+      - key: KOI_URL
+        value: https://nasa-ml-models.onrender.com/koi
+      - key: K2_URL
+        value: https://nasa-ml-models.onrender.com/k2
+      - key: CUSTOM_URL
+        value: https://nasa-ml-models.onrender.com/custom
+      - key: EMAIL_USER
+        value: "princetarunvemuri@gmail.com"
+      - key: EMAIL_PASS
+        value: "nbqzqooxjtvwlzwu"
+    healthCheckPath: /health
+    autoDeploy: true
+    nodeVersion: 18.17.0
+      - key: K2_URL
+        value: https://nasa-ml-models.onrender.com/k2
+      - key: CUSTOM_URL
+        value: https://nasa-ml-models.onrender.com/custom
+    healthCheckPath: /health
+    autoDeploy: true
+    nodeVersion: 18.17.0
+>>>>>>> 582140d (Updated)
