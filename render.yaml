@@ -26,7 +26,7 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        value: "mongodb+srv://tarun06:540847@myatlasclusteredu.mb5nul7.mongodb.net/SampleFreeUsecode?retryWrites=true&w=majority&appName=myAtlasClusterEDU"
+        value: "false"
       - key: JWT_SECRET_TOKEN
         value: "mytokenisverysfasfsfaffkakfkasSkkkfdasecretwhichyoudontknoafdjanfakfnkakfasw"
       - key: CLIENT_URL
@@ -40,9 +40,9 @@ services:
       - key: CUSTOM_URL
         value: https://nasa-ml-models.onrender.com/custom
       - key: EMAIL_USER
-        value: "princetaruncemuri@gmail.com"
+        value: "false"
       - key: EMAIL_PASS
-        value: "nbqzqooxjtvwlzwu"
+        value: "false"
     healthCheckPath: /health
     autoDeploy: true
     nodeVersion: 18.17.0
