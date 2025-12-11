@@ -8,6 +8,7 @@ services:
       cd client && npm ci
       echo "Building React app..."
       npm run build
+      
       echo "Installing server dependencies..."
       cd ../server && npm ci
     startCommand: |
@@ -15,6 +16,7 @@ services:
       echo "Setting up static files..."
       mkdir -p server/public
       cp -r client/dist/* server/public/
+      
       # Start the server
       echo "Starting server..."
       cd server && npm start
@@ -23,12 +25,10 @@ services:
         value: production
       - key: PORT
         value: 10000
-      - key: NODE_VERSION  # ✅ Correct way to set Node version for this service
-        value: 18.17.0
       - key: DATABASE_URL
-        sync: false  # ✅ Use this for secrets
+        sync: false
       - key: JWT_SECRET_TOKEN
-        sync: false  # ✅ Use this for secrets
+        sync: false
       - key: CLIENT_URL
         value: https://nasaspaceproject.onrender.com
       - key: TOI_URL
@@ -42,7 +42,7 @@ services:
       - key: EMAIL_USER
         value: "princetaruncemuri@gmail.com"
       - key: EMAIL_PASS
-        sync: false  # ✅ Use this for secrets
+        sync: false
     healthCheckPath: /health
     autoDeploy: true
-    # ❌ Remove the "nodeVersion: 18.17.0" line from here
+    nodeVersion: 18.17.0
